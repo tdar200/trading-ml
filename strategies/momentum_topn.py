@@ -34,7 +34,8 @@ class MomentumTopNStrategy(Strategy):
     def __init__(self, config: MomentumTopNConfig) -> None:
         super().__init__(config)
         self._closes: dict[str, list[float]] = {}
-        self._last_rebalance_month: tuple[int, int] | None = None  # (year, month)
+        self._last_rebalance_month: tuple[int, int] | None = None
+        self._rebalance_count: int = 0  # observable for tests
 
     # ---- lifecycle ----
 
@@ -50,10 +51,23 @@ class MomentumTopNStrategy(Strategy):
         ticker = self._ticker_for(bar)
         history = self._closes.setdefault(ticker, [])
         history.append(float(bar.close))
-        # Keep just enough history for the ranker plus a small slack.
         cap = self.config.lookback_days + self.config.skip_days + 5
         if len(history) > cap:
             del history[0 : len(history) - cap]
+
+        # Rebalance check — only on tradeable-universe bars, only after warm-up,
+        # only when this bar's month differs from the last rebalance month.
+        if ticker not in self.config.universe:
+            return
+        if not self._is_warmed_up():
+            return
+
+        year, month = self._year_month(bar.ts_event)
+        if self._last_rebalance_month == (year, month):
+            return
+        # Either first bar ever or first bar of a new month.
+        self._last_rebalance_month = (year, month)
+        self._rebalance(bar.ts_event)
 
     # ---- helpers ----
 
@@ -63,3 +77,20 @@ class MomentumTopNStrategy(Strategy):
     def _ticker_for(self, bar: Bar) -> str:
         # BarType serializes as "<TICKER>.<VENUE>-1-DAY-...". Pull the ticker out.
         return str(bar.bar_type).split(".")[0]
+
+    def _is_warmed_up(self) -> bool:
+        needed = self.config.lookback_days + self.config.skip_days + 1
+        return all(
+            len(self._closes.get(t, [])) >= needed
+            for t in self.config.universe
+        )
+
+    @staticmethod
+    def _year_month(ts_ns: int) -> tuple[int, int]:
+        from datetime import datetime, timezone
+        dt = datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc)
+        return dt.year, dt.month
+
+    def _rebalance(self, now_ts_ns: int) -> None:
+        # Task 7 fills this in; for now we only count.
+        self._rebalance_count += 1

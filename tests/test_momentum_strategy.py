@@ -137,3 +137,54 @@ def test_ring_buffer_is_size_bounded():
     # it must NOT grow unbounded across many bars.
     assert len(bt.strategy._closes["A"]) <= 5 + 1 + 5  # generous upper bound (=11)
     assert bt.strategy._closes["A"][-1] == pytest.approx(129.0)
+
+
+# ---- rebalance trigger tests (Task 6) ----
+
+def _build_warmup_passing_closes(n_days: int) -> list[float]:
+    """Trivial closes long enough to pass any reasonable warm-up window."""
+    return [100.0 + 0.01 * i for i in range(n_days)]
+
+
+def test_no_rebalance_during_warmup():
+    # 100 days is < lookback(126) + skip(21) = 147 — never warmed up.
+    closes = {"A": _build_warmup_passing_closes(100),
+              "B": _build_warmup_passing_closes(100)}
+    bt = _run_synthetic_backtest(
+        closes_by_ticker=closes,
+        benchmark_closes=[200.0] * 100,
+        top_n=1,  # default lookback_days=126, skip_days=21
+    )
+    assert bt.strategy._rebalance_count == 0
+
+
+def test_rebalance_fires_monthly_after_warmup():
+    # ~380 days of daily bars ensures we pass warm-up by day ~147 and then see
+    # multiple month rollovers in the remaining window.
+    closes = {"A": _build_warmup_passing_closes(380),
+              "B": _build_warmup_passing_closes(380),
+              "C": _build_warmup_passing_closes(380)}
+    bt = _run_synthetic_backtest(
+        closes_by_ticker=closes,
+        benchmark_closes=[200.0] * 380,
+        top_n=2,
+    )
+    # We expect rebalances to fire roughly once per calendar month after warm-up.
+    # Synthetic timestamps advance 1 calendar day per bar.
+    # 380 calendar days ≈ 12-13 month rollovers; first ~147 days are warm-up.
+    # Loose bounds — testing "happens monthly", not exact count.
+    assert 6 <= bt.strategy._rebalance_count <= 12, (
+        f"expected ~monthly rebalances after warm-up, got {bt.strategy._rebalance_count}"
+    )
+
+
+def test_warmup_requires_every_tradeable_ticker():
+    # A has full history, B is short. Warm-up should NEVER complete — no rebalance fires.
+    closes = {"A": _build_warmup_passing_closes(380),
+              "B": _build_warmup_passing_closes(80)}   # B is short → no warmup
+    bt = _run_synthetic_backtest(
+        closes_by_ticker=closes,
+        benchmark_closes=[200.0] * 380,
+        top_n=1,
+    )
+    assert bt.strategy._rebalance_count == 0
