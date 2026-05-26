@@ -12,3 +12,4 @@ results/
 *.egg-info/
 dist/
 build/
+livesim/cache/
