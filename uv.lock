@@ -1339,6 +1339,7 @@ dependencies = [
     { name = "polars" },
     { name = "python-dotenv" },
     { name = "quantstats" },
+    { name = "scipy" },
     { name = "yfinance" },
 ]
 
@@ -1356,6 +1357,7 @@ requires-dist = [
     { name = "polars", specifier = ">=1.0" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "quantstats", specifier = ">=0.0.62" },
+    { name = "scipy", specifier = ">=1.13" },
     { name = "yfinance", specifier = ">=0.2" },
 ]
 
