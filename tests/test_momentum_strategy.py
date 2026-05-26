@@ -188,3 +188,45 @@ def test_warmup_requires_every_tradeable_ticker():
         top_n=1,
     )
     assert bt.strategy._rebalance_count == 0
+
+
+# ---- position sizing tests (Task 7) ----
+
+def _held_tickers(bt) -> set[str]:
+    """Return the set of tickers with a nonzero open position at end of backtest."""
+    held: set[str] = set()
+    for t in bt.strategy.config.universe:
+        instr_id = InstrumentId.from_str(f"{t}.{VENUE_MIC}")
+        positions = bt.engine.cache.positions_open(instrument_id=instr_id)
+        if positions and any(p.signed_qty != 0 for p in positions):
+            held.add(t)
+    return held
+
+
+def test_top_n_positions_held_after_first_rebalance():
+    """With known-ranked synthetic data, the strategy should hold the top-N tickers."""
+    # 380 daily closes so warm-up completes by ~day 147 and we get ~8 monthly rebalances.
+    # Build closes such that A > B > C > D > E by 6-month-skip-1 return.
+    # Different daily growth rates produce a clear, stable ranking.
+    def grow(rate: float) -> list[float]:
+        out = [100.0]
+        for _ in range(379):
+            out.append(out[-1] * (1.0 + rate))
+        return out
+
+    closes = {
+        "A": grow(0.0020),  # fastest
+        "B": grow(0.0015),
+        "C": grow(0.0010),
+        "D": grow(0.0005),
+        "E": grow(0.0000),  # slowest
+    }
+    bt = _run_synthetic_backtest(
+        closes_by_ticker=closes,
+        benchmark_closes=[200.0] * 380,
+        top_n=3,
+    )
+
+    # After the final rebalance, the strategy should hold A, B, C (the top 3).
+    held = _held_tickers(bt)
+    assert held == {"A", "B", "C"}, f"expected top-3 {{A,B,C}}, got {held}"

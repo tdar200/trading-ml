@@ -13,6 +13,9 @@ from __future__ import annotations
 
 from nautilus_trader.config import StrategyConfig
 from nautilus_trader.model.data import Bar, BarType
+from nautilus_trader.model.enums import OrderSide, TimeInForce
+from nautilus_trader.model.identifiers import InstrumentId, Venue
+from nautilus_trader.model.objects import Quantity
 from nautilus_trader.trading.strategy import Strategy
 
 from data.instruments import VENUE_MIC
@@ -92,5 +95,54 @@ class MomentumTopNStrategy(Strategy):
         return dt.year, dt.month
 
     def _rebalance(self, now_ts_ns: int) -> None:
-        # Task 7 fills this in; for now we only count.
+        """Reconcile current holdings to the ranker's top-N target (equal-weight)."""
         self._rebalance_count += 1
+
+        # 1. Ranker's verdict over the tradeable universe.
+        ranked = rank_by_momentum(
+            {t: self._closes.get(t, []) for t in self.config.universe},
+            lookback_days=self.config.lookback_days,
+            skip_days=self.config.skip_days,
+        )
+        if not ranked:
+            return  # nothing to do (shouldn't happen post-warmup, but defensive)
+        target_tickers = set(ranked[: self.config.top_n])
+
+        # 2. Equity → per-name target USD. Use `portfolio.equity(venue)` which
+        # includes the mark value of open positions (not just cash), so the
+        # equal-weight target survives the cash-account "spent most of it on
+        # stock" cycle. For cash accounts: equity = balance.total + Σ mark_value.
+        venue = Venue(VENUE_MIC)
+        account = self.portfolio.account(venue)
+        equity_money = self.portfolio.equity(venue)[account.base_currency]
+        equity_usd = float(equity_money.as_decimal())
+        per_name_usd = equity_usd / max(self.config.top_n, 1)
+
+        # 3. For each universe ticker, compute current signed shares + target shares + delta.
+        for t in self.config.universe:
+            instr_id = InstrumentId.from_str(f"{t}.{VENUE_MIC}")
+            current = self._current_position_qty(instr_id)
+            if t in target_tickers:
+                last_close = self._closes[t][-1]
+                target = int(per_name_usd / last_close) if last_close > 0 else 0
+            else:
+                target = 0
+            delta = target - current
+            if delta == 0:
+                continue
+            side = OrderSide.BUY if delta > 0 else OrderSide.SELL
+            qty = Quantity.from_int(abs(delta))
+            order = self.order_factory.market(
+                instrument_id=instr_id,
+                order_side=side,
+                quantity=qty,
+            )
+            self.submit_order(order)
+
+    def _current_position_qty(self, instrument_id) -> int:
+        """Return current signed position in shares for the given instrument."""
+        positions = self.cache.positions_open(instrument_id=instrument_id)
+        if not positions:
+            return 0
+        # Sum signed quantities across any open positions for this instrument.
+        return int(sum(float(p.signed_qty) for p in positions))
