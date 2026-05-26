@@ -22,7 +22,11 @@ for the full design, philosophy, and staged roadmap.
   - [x] Runnable: `uv run python examples/run_harness.py` (full) or `--smoke` (dev iteration)
   - [x] Acceptance run: 90 walk-forward + 4 cost-stress backtests over the full catalog. Winner: `top_n=3, lookback_days=63, skip_days=0` (3-month momentum without skip — different from Stage 2's hardcoded baseline). Winner median window Sharpe 1.02 (range [0.88, 1.68]); cluster of similarly-good configs (5-95th percentile of all combo-window Sharpes: [0.41, 1.66]); CAGR ≈16% across slippage 0→2 bps (robust to costs); Deflated Sharpe p=1.00, z=23.33 with n_trials=90 — the winner's Sharpe is unlikely to be pure selection bias.
   - The harness winner still underperforms SPY in CAGR (≈16% vs ≈21%) but has comparable risk-adjusted return (Sharpe ≈1.03 vs SPY ≈1.10) and a better max drawdown (-18% vs -25%). Honest characterization, not a deployment signal.
-- [ ] Stage 4 — Sim-live loop
+- [~] Stage 4 — LiveNode sim-live infrastructure
+  - [x] `livesim/{data_client,exec_client,factories,node_config}.py` — `TradingNode` wiring with `CatalogLiveDataClient` (catalog-replay) + `SimulatedLiveExecutionClient` (next-bar fills, SELL-before-BUY buffering for cash-account safety).
+  - [x] Runnable: `uv run python examples/run_trading_node.py --fast-replay` (one-shot) or `--poll-seconds N` (continuous).
+  - [x] **Integration parity (synthetic, top_n=1)**: 0.38% drift vs `BacktestEngine` — well under the 1% gate. Runtime infrastructure validated end-to-end (tests/test_live_sim_integration.py).
+  - [ ] **Real-catalog parity (top_n=3): KNOWN GAP.** Full 17k-bar catalog fast-replay produces final equity ≈$170k vs Stage-3 backtest's ≈$239k at the same slippage=0 — about 29% drift. Likely cause: async event ordering with cross-ticker rotations at top_n>1, which the synthetic test (top_n=1) doesn't surface. The TradingNode loop runs cleanly; the strategy makes credible trades; but parity with `BacktestEngine` on real data is not yet established. Stage-4.5 follow-up.
 - [ ] Stages 5–8 — see design spec
 
 ## Setup
@@ -78,11 +82,27 @@ uv run python examples/run_harness.py --smoke    # tiny grid (~5 sec) for dev it
 Writes `walk_forward.csv`, `cost_stress.csv`, `summary.json`, `summary.md` to `results/harness_<timestamp>/`.
 Prints the 5-section Markdown verdict (time stability / parameter robustness / cost survival / Deflated Sharpe / bottom line).
 
+### LiveNode sim-live
+
+```bash
+# Stage 4: TradingNode replay/continuous against the Stage-1 catalog
+uv run python examples/run_trading_node.py --fast-replay --slippage-prob 0.0  # one-shot replay
+uv run python examples/run_trading_node.py --poll-seconds 60                  # continuous, poll every 60s for dev
+uv run python examples/run_trading_node.py                                    # continuous, poll daily (production cadence)
+```
+
+Wires `MomentumTopNStrategy` into Nautilus's `TradingNode` runtime via livesim's `CatalogLiveDataClient` + `SimulatedLiveExecutionClient`. Prints final equity. Strategy code is unchanged from Stage 2 (research→live parity).
+
+⚠️ **Known gap (Stage 4.5):** real-catalog fast-replay differs from `BacktestEngine` by ~29% at the same slippage. The synthetic integration test (top_n=1) achieves 0.38% drift; the real catalog with top_n=3 surfaces an async event-ordering issue around cross-ticker rotation days that is not yet fully resolved.
+
 ## Layout
 
 ```
 data/         pipeline modules + the ParquetDataCatalog (catalog gitignored)
-examples/     runnable demos (smoke backtest)
+strategies/   Nautilus Strategy implementations + venue/FillModel helper
+analysis/     honesty-harness modules (runner, walk_forward, costs, DSR, tearsheet)
+livesim/      Stage-4 TradingNode wiring — CatalogLiveDataClient, SimulatedLiveExecutionClient, factories, node_config
+examples/     runnable demos (smoke backtest, momentum backtest, harness, run_trading_node)
 scripts/      one-off scripts (yfinance cross-check)
 tests/        pytest suite
 docs/         design spec, plans, Nautilus API notes
