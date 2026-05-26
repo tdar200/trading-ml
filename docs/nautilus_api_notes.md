@@ -497,6 +497,42 @@ Also verified to exist on the account object:
 `decimal.Decimal`) or `.as_double()` (returns `float`). `.as_decimal()` is preferred for any P&L
 math to preserve precision.
 
+### 9.6.1 Portfolio equity (cash + mark value)
+
+For total portfolio value INCLUSIVE of open positions' mark value, use
+`portfolio.equity(venue)` which returns `dict[Currency, Money]`. This is what
+strategies should use for equal-weight position sizing across multiple
+rebalances — `account.balance_total(...)` returns CASH ONLY, which drops
+sharply after the first rebalance deploys equity into positions.
+
+```python
+account = strategy.portfolio.account(venue)
+equity_by_ccy = strategy.portfolio.equity(venue)            # dict[Currency, Money]
+equity_usd = float(equity_by_ccy[account.base_currency].as_decimal())
+```
+
+Verified signature (from `inspect.signature(Portfolio.equity)`):
+
+```
+Portfolio.equity(self, Venue venue=None, AccountId account_id=None) -> dict
+```
+
+Verified docstring excerpt:
+
+> Return the per-currency total equity for the given venue or account (if found).
+>
+> For cash and betting accounts: `balance.total + Σ mark_value(open positions)`.
+> For margin accounts: `balance.total + Σ unrealized_pnl(open positions)`.
+>
+> Instruments that cannot be priced are tracked via `missing_price_instruments`,
+> so equity understatement surfaces via a warn-once log.
+
+For a CashAccount, `portfolio.equity(venue)[ccy]` ≈ `balance.total + Σ mark_value(open_positions[ccy])`.
+Verified by behavior: in a backtest where the strategy deploys ~$99,790 of $100k into stock on
+the first rebalance, `account.balance_total` reports ~$200 (the residual cash) while
+`portfolio.equity` reports ~$100,000 (cash + mark value of holdings). The Strategy in
+`strategies/momentum_topn.py` uses `portfolio.equity` for this reason.
+
 ### 9.7 Account-state time-series (for tearsheet equity curve)
 
 **There is no built-in per-bar equity time-series API on `Cache` in v1.227.** What exists:
@@ -723,6 +759,8 @@ Stage 2:
 - **Task 7 (Position reconciliation):** §9.5 — query with
   `self.cache.positions_open(instrument_id=iid)`; flat ⇔ list is empty.
   Use `position.signed_qty` (positive long, negative short) when computing target-vs-actual deltas.
+  For equal-weight sizing across rebalances, use `portfolio.equity(venue)` (§9.6.1) — not
+  `account.balance_total` which is cash-only and collapses after the first rebalance.
 - **Task 9 (FillModel slippage helper):** §9.8 — `FillModel(prob_fill_on_limit=1.0,
   prob_slippage=p, random_seed=seed)` wired via `add_venue(fill_model=...)`. Slip magnitude is
   **fixed at one tick**; only the probability is tunable. For 0.5 bps nominal on ~$50 ETFs use

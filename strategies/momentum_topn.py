@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from nautilus_trader.config import StrategyConfig
 from nautilus_trader.model.data import Bar, BarType
-from nautilus_trader.model.enums import OrderSide, TimeInForce
+from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.identifiers import InstrumentId, Venue
 from nautilus_trader.model.objects import Quantity
 from nautilus_trader.trading.strategy import Strategy
@@ -139,7 +139,7 @@ class MomentumTopNStrategy(Strategy):
             )
             self.submit_order(order)
 
-    def _current_position_qty(self, instrument_id) -> int:
+    def _current_position_qty(self, instrument_id: InstrumentId) -> int:
         """Return current signed position in shares for the given instrument."""
         positions = self.cache.positions_open(instrument_id=instrument_id)
         if not positions:
