@@ -723,7 +723,7 @@ engine.dispose()
 
 ---
 
-## 11. Enums (verified members)
+## 10. Enums (verified members)
 
 ```python
 from nautilus_trader.model.enums import AccountType, OmsType, AggregationSource
@@ -741,7 +741,7 @@ from nautilus_trader.model.enums import OrderSide, TimeInForce, PositionSide
 # PositionSide:  NO_POSITION_SIDE (filter sentinel), FLAT, LONG, SHORT
 ```
 
-## 12. Summary for downstream tasks
+## 11. Summary for downstream tasks
 
 Stage 1:
 - **Task 3 (smoke backtest):** use the §8 skeleton; balance read via
@@ -772,14 +772,14 @@ Stage 2:
   fill-resolution time series; supplement with `engine.cache.orders()[*].events` for per-fill
   detail if needed. **No `account_states_for_venue` / built-in equity time-series API exists.**
 
-## 10. LiveNode (Stage 4)
+## 12. LiveNode (Stage 4)
 
 > Stage 4 ground truth. Verified 2026-05-26 against `nautilus_trader==1.227.0` by
 > introspection (`inspect.signature` / `dir()`), reading the package's own `_template`
-> adapter, and running the end-to-end snippet at §10.9 to completion. Anything I could
+> adapter, and running the end-to-end snippet at §12.9 to completion. Anything I could
 > NOT verify is called out inline.
 
-### 10.1 Imports (all verified importable in this env)
+### 12.1 Imports (all verified importable in this env)
 
 ```python
 import asyncio
@@ -819,7 +819,7 @@ Key naming differences from older tutorials:
 - `CacheConfig` is canonically imported from `nautilus_trader.config` (matches §1 pattern) —
   same object as `nautilus_trader.cache.config.CacheConfig`.
 
-### 10.2 TradingNode lifecycle
+### 12.2 TradingNode lifecycle
 
 Verified `TradingNode` class is from `nautilus_trader.live.node`. Signatures:
 
@@ -866,7 +866,7 @@ TradingNode.dispose(self) -> None                # sync only — closes the even
    only after the loop has stopped (after `run()` returns).
 
 **For tests / programmatic shutdown:** schedule `node.stop_async()` from inside the loop
-via `node.kernel.loop.create_task(...)` before calling `node.run()`. See §10.9.
+via `node.kernel.loop.create_task(...)` before calling `node.run()`. See §12.9.
 
 **Properties / accessors:**
 
@@ -878,7 +878,7 @@ via `node.kernel.loop.create_task(...)` before calling `node.run()`. See §10.9.
 - `node.is_running` → `bool`
 - `node.is_built` → `bool`
 
-### 10.3 `TradingNodeConfig` — fields
+### 12.3 `TradingNodeConfig` — fields
 
 `TradingNodeConfig` is a **msgspec Struct** (subclass of `NautilusKernelConfig`) — pass
 fields as kwargs. Full field list (default values from `msgspec.structs.fields(...)`):
@@ -888,7 +888,7 @@ fields as kwargs. Full field list (default values from `msgspec.structs.fields(.
 | `environment` | `Environment` | `Environment.LIVE` | enum from `nautilus_trader.common.enums` |
 | `trader_id` | `TraderId` (str-coercible) | `'TRADER-001'` | format `'NAME-NNN'` |
 | `instance_id` | `UUID4 \| None` | `None` | |
-| `cache` | `CacheConfig \| None` | `None` | see §10.7 |
+| `cache` | `CacheConfig \| None` | `None` | see §12.7 |
 | `message_bus` | `MessageBusConfig \| None` | `None` | |
 | `data_engine` | `LiveDataEngineConfig` | default instance | qsize, bar build flags |
 | `risk_engine` | `LiveRiskEngineConfig` | default instance | rate limits etc. |
@@ -919,7 +919,7 @@ fields as kwargs. Full field list (default values from `msgspec.structs.fields(.
 client that returns no mass-status, the node still gates startup on a 10-second delay
 before `Trader.start()` is called → strategies never go RUNNING in short tests. **For
 simulated/stub exec clients, set `exec_engine=LiveExecEngineConfig(reconciliation=False)`.**
-Verified empirically: with `reconciliation=True` the snippet at §10.9 records 0 bars in a
+Verified empirically: with `reconciliation=True` the snippet at §12.9 records 0 bars in a
 4-second window; with `reconciliation=False` it records 1 bar as expected.
 
 **`data_clients` / `exec_clients` dict shape:** key is the **client name** (used as the
@@ -935,7 +935,7 @@ needed for in-process Stage 4 wiring.
 — set `default=True` to make the client the default for its data/exec type, or list specific
 venues to route by venue.
 
-### 10.4 LiveDataClient / LiveMarketDataClient — abstract surface
+### 12.4 LiveDataClient / LiveMarketDataClient — abstract surface
 
 Two base classes; pick based on what you emit:
 
@@ -1000,7 +1000,7 @@ if you don't override `_subscribe_bars` and a strategy calls `self.subscribe_bar
 the engine logs an error and the upstream subscription state is inconsistent** — even
 though `self._handle_data(bar)` calls from elsewhere still flow through to subscribed
 strategies. Best practice: override `_subscribe_bars`/`_unsubscribe_bars` as no-ops if you
-won't honour the subscription externally. Verified — see §10.9.
+won't honour the subscription externally. Verified — see §12.9.
 
 **Emitting bars into the engine: `self._handle_data(bar)`** — a Cython instance method
 inherited from `DataClient`. Confirmed by grepping the binance/deribit/dydx adapters:
@@ -1014,7 +1014,7 @@ data engine to all subscribers. For request/response (backfill) flows use
 are set up later in the lifecycle (`Trader.start()` runs after the connection step). If
 you emit a bar synchronously inside `_connect()`, the strategy hasn't yet been started and
 its `on_bar` won't fire. Schedule emission via `self.create_task(coro)` with an
-`asyncio.sleep` so the bar lands after `Trader.start()`. Verified — see §10.9.
+`asyncio.sleep` so the bar lands after `Trader.start()`. Verified — see §12.9.
 
 **Connection state:** the base class' `connect()` does NOT auto-set `is_connected = True`
 — `_connect()` must call `self._set_connected(True)` (and `_disconnect` must call
@@ -1022,7 +1022,7 @@ its `on_bar` won't fire. Schedule emission via `self.create_task(coro)` with an
 `Awaiting engine connections and initializations` until `timeout_connection` fires.
 Verified.
 
-### 10.5 LiveExecutionClient — abstract surface
+### 12.5 LiveExecutionClient — abstract surface
 
 **Verified constructor signature:**
 
@@ -1103,7 +1103,7 @@ For more complex reconciliation flows, emit reports via `_send_order_status_repo
 `_send_fill_report`, `_send_position_status_report`, `_send_mass_status_report`,
 `_send_order_event` — these route through the exec engine's reconciliation path.
 
-### 10.6 Factory protocol
+### 12.6 Factory protocol
 
 Both factory base classes are plain classes (NOT abstract / NOT msgspec) with a single
 **`staticmethod` `create()`**. Verified by `inspect.getattr_static(LiveDataClientFactory, 'create')`
@@ -1162,7 +1162,7 @@ above are passed. Verified in `nautilus_trader/live/node_builder.py:240-249`.
 and instantiate the factory class for you — useful for config-from-disk flows but not
 required for in-process wiring.
 
-### 10.7 CacheConfig — Parquet support? **No (for state); yes (for read-side data).**
+### 12.7 CacheConfig — Parquet support? **No (for state); yes (for read-side data).**
 
 `CacheConfig` fields:
 
@@ -1204,7 +1204,7 @@ required for in-process wiring.
 this explicitly in the strategy: any in-memory state is rebuilt by re-feeding bars from
 the catalog at startup. No Redis required.
 
-### 10.8 Strategy persistence — `on_save` / `on_load` exist, but are cache-backed
+### 12.8 Strategy persistence — `on_save` / `on_load` exist, but are cache-backed
 
 **Yes, both hooks exist in v1.227** (Strategy inherits them from Actor):
 
@@ -1220,7 +1220,7 @@ class Strategy:
 **Storage path:** `Trader.save()` calls each strategy's `save()` and writes the returned
 dict to `Cache.update_strategy(strategy)`. `Trader.load()` calls
 `Cache.load_strategy(strategy)` and passes the dict to `strategy.load(state)`. **The Cache
-must be Redis-backed for these calls to actually persist across restarts** (see §10.7).
+must be Redis-backed for these calls to actually persist across restarts** (see §12.7).
 
 **Triggering:** `Trader.save()` / `Trader.load()` run automatically on
 `TradingNode.run()` / `stop()` if `TradingNodeConfig.save_state=True` /
@@ -1235,7 +1235,7 @@ within an active TradingNode/BacktestEngine lifecycle.
 and **re-replay enough historical bars on startup to rebuild the strategy's indicator /
 position state**. This is the pattern Stage 4 should adopt.
 
-### 10.9 End-to-end working snippet (verified runs to `bars_received == 1`)
+### 12.9 End-to-end working snippet (verified runs to `bars_received == 1`)
 
 This snippet is run verbatim from `/tmp/nautilus_recon/snippet_v1.py` on
 `nautilus_trader==1.227.0`, Python 3.12, and produces:
@@ -1430,7 +1430,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-### 10.10 Summary for downstream Stage 4 tasks
+### 12.10 Summary for downstream Stage 4 tasks
 
 - **Task 3 (CatalogLiveDataClient — fast-replay):** subclass `LiveMarketDataClient`,
   override `_connect` (load the catalog + schedule `_handle_data(bar)` calls for each row),
@@ -1442,14 +1442,14 @@ if __name__ == "__main__":
   `node.kernel.trader.add_strategy(...)` and asserting the counter increments after
   `node.run()` completes.
 - **Task 5 (SimulatedLiveExecutionClient):** subclass `LiveExecutionClient`. Override the
-  10 methods listed in §10.5. Emit fills via `self.generate_order_filled(...)`. Set
+  10 methods listed in §12.5. Emit fills via `self.generate_order_filled(...)`. Set
   `client_id.value`-matching `AccountId` in `__init__`. Either follow the sandbox adapter's
   pattern of wrapping a `SimulatedExchange` + `BacktestExecClient`, or implement bar-close
   fills inline.
 - **Task 6 (factories):** plain classes inheriting `LiveDataClientFactory` /
   `LiveExecClientFactory` with a `@staticmethod create(loop, name, config, msgbus, cache, clock)`.
   Avoid naming the exec factory `SandboxLiveExecClientFactory` unless you actually want the
-  builder to inject `portfolio` (§10.6).
+  builder to inject `portfolio` (§12.6).
 - **Task 7 (build_trading_node_config helper):** produce a `TradingNodeConfig` with
   `exec_engine=LiveExecEngineConfig(reconciliation=False)` (no live venue to reconcile
   against), `cache=None` (no Redis), `data_clients={"CATALOG": LiveDataClientConfig()}`,
