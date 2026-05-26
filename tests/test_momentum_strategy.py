@@ -230,3 +230,34 @@ def test_top_n_positions_held_after_first_rebalance():
     # After the final rebalance, the strategy should hold A, B, C (the top 3).
     held = _held_tickers(bt)
     assert held == {"A", "B", "C"}, f"expected top-3 {{A,B,C}}, got {held}"
+
+
+def test_holdings_rotate_when_ranks_flip():
+    """When the leading ticker changes after warm-up, holdings should rotate."""
+    # Build 380 daily closes for 5 tickers. First half: C leads; second half: E leads.
+    n = 380
+    half = n // 2
+
+    def build(early_rate: float, late_rate: float) -> list[float]:
+        out = [100.0]
+        for i in range(n - 1):
+            r = early_rate if i < half else late_rate
+            out.append(out[-1] * (1.0 + r))
+        return out
+
+    closes = {
+        "A": build(0.0005, 0.0005),
+        "B": build(0.0005, 0.0005),
+        "C": build(0.0020, 0.0000),   # leader early, flat late
+        "D": build(0.0005, 0.0005),
+        "E": build(0.0000, 0.0030),   # flat early, leader late
+    }
+    bt = _run_synthetic_backtest(
+        closes_by_ticker=closes,
+        benchmark_closes=[200.0] * n,
+        top_n=1,  # narrow the test — we only care which single name leads
+    )
+
+    held = _held_tickers(bt)
+    assert "E" in held, f"expected new leader E to be held, got {held}"
+    assert "C" not in held, f"expected old leader C to be dropped, got {held}"
