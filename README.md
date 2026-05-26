@@ -13,8 +13,12 @@ for the full design, philosophy, and staged roadmap.
   - [x] Live catalog populated (12 tickers; SPY ~2018-11, sector ETFs ~2020-07 → today on free-tier IEX).
         Cross-check passes at 1.5% tolerance (free-tier IEX vs yfinance SIP venue
         noise — see design spec §7).
-- [ ] Stage 2 — First strategy (momentum top-N)
-- [ ] Stages 3–8 — see design spec
+- [x] Stage 2 — Momentum top-N strategy + tearsheet
+  - [x] Pure ranker + Nautilus Strategy (monthly top-3 by 6m-skip-1 momentum) + quantstats tearsheet
+  - [x] Acceptance backtest: `uv run python examples/backtest_momentum.py`
+  - On the ~2020-07→2026 window the simple momentum strategy underperformed SPY buy-and-hold (≈9% vs ≈21% CAGR) — the expected honest baseline per the design spec; the milestone is a credible, reproducible tearsheet, not beating SPY.
+- [ ] Stage 3 — Honesty harness (walk-forward, Deflated Sharpe, cost stress)
+- [ ] Stages 4–8 — see design spec
 
 ## Setup
 
@@ -47,6 +51,16 @@ uv run pytest tests -v --ignore=tests/test_catalog_integration.py
 # Integration tests (real Alpaca calls — needs .env populated; auto-skip otherwise)
 uv run pytest tests/test_catalog_integration.py -v
 ```
+
+## Backtest
+
+```bash
+# Stage 2: momentum top-N over the full catalog → quantstats tearsheet
+uv run python examples/backtest_momentum.py
+```
+
+Writes `equity.csv`, `spy_close.csv`, and `tearsheet.html` to `results/momentum_topn_<timestamp>/`.
+Prints a CAGR / Sharpe / max-drawdown summary for the strategy vs SPY.
 
 ## Layout
 
