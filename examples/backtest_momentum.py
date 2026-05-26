@@ -55,44 +55,29 @@ def _spy_close_series(catalog: ParquetDataCatalog) -> pd.Series:
     return s
 
 
-def _equity_curve_from_engine(engine: BacktestEngine, venue) -> pd.Series:
-    """Reconstruct the strategy's equity curve from the account-event log.
+def _equity_curve_from_engine(engine: BacktestEngine, venue, strategy) -> pd.Series:
+    """Equity time series — strategy's per-day mark-to-market snapshot.
 
-    Per docs/nautilus_api_notes.md §9.7: NautilusTrader v1.227 has no built-in
-    time-series equity API, but `account.events` gives one AccountState per
-    balance change (initial funding + every fill). Each event has ts_event
-    (int ns) and balances (list of AccountBalance with .total Money). The
-    verified attribute path (§9.7 Option A) is `b.currency == account.base_currency`,
-    then `b.total.as_decimal()`.
+    The Strategy snapshots `portfolio.equity(venue)` once per benchmark bar (one
+    per calendar trading day), which gives a proper daily mark-to-market equity
+    curve. Falls back to account.events (cash-only — only meaningful pre-first-rebalance)
+    if the strategy's history is somehow empty.
     """
+    if strategy._equity_history:
+        rows = [
+            (pd.Timestamp(ts_ns, unit="ns", tz="UTC").tz_convert(None).normalize(), eq)
+            for ts_ns, eq in strategy._equity_history
+        ]
+        df = pd.DataFrame(rows, columns=["date", "equity"]).groupby("date").last()
+        return df["equity"].sort_index()
+
+    # Fallback (shouldn't happen if benchmark bars are subscribed).
     account = engine.portfolio.account(venue)
-    events = list(account.events)
-    if not events:
-        # Fallback: just a single end-of-backtest point.
-        final = account.balance_total(account.base_currency)
-        return pd.Series(
-            {pd.Timestamp.utcnow().tz_localize(None).normalize(): float(final.as_decimal())},
-            name="equity",
-        )
-
-    rows: list[tuple[pd.Timestamp, float]] = []
-    for ev in events:
-        ts = pd.Timestamp(ev.ts_event, unit="ns", tz="UTC").tz_convert(None).normalize()
-        # `balances` is list[AccountBalance]; pick the entry in the account's base currency.
-        total = None
-        for bal in ev.balances:
-            if bal.currency == account.base_currency:
-                total = float(bal.total.as_decimal())
-                break
-        if total is None:
-            continue
-        rows.append((ts, total))
-    if not rows:
-        return pd.Series(name="equity", dtype=float)
-
-    # Multiple events on the same day collapse to the LAST value for that day.
-    df = pd.DataFrame(rows, columns=["date", "equity"]).groupby("date").last()
-    return df["equity"].sort_index()
+    final = account.balance_total(account.base_currency)
+    return pd.Series(
+        {pd.Timestamp.utcnow().tz_localize(None).normalize(): float(final.as_decimal())},
+        name="equity",
+    )
 
 
 def main() -> int:
@@ -126,10 +111,11 @@ def main() -> int:
         return 1
 
     # 4. Strategy.
-    engine.add_strategy(MomentumTopNStrategy(config=MomentumTopNConfig(
+    strategy = MomentumTopNStrategy(config=MomentumTopNConfig(
         universe=UNIVERSE,
         benchmark=BENCHMARK,
-    )))
+    ))
+    engine.add_strategy(strategy)
 
     # 5. Run.
     print("running backtest...")
@@ -137,7 +123,7 @@ def main() -> int:
     print("backtest complete")
 
     # 6. Equity curve + SPY close series → tearsheet.
-    equity = _equity_curve_from_engine(engine, venue)
+    equity = _equity_curve_from_engine(engine, venue, strategy)
     spy = _spy_close_series(catalog)
     equity.to_csv(out_dir / "equity.csv", header=True)
     spy.to_csv(out_dir / "spy_close.csv", header=True)

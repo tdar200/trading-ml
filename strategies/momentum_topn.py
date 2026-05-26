@@ -39,6 +39,11 @@ class MomentumTopNStrategy(Strategy):
         self._closes: dict[str, list[float]] = {}
         self._last_rebalance_month: tuple[int, int] | None = None
         self._rebalance_count: int = 0  # observable for tests
+        # Equity snapshots — one per calendar day, taken on benchmark bars.
+        # Stored as list of (ts_ns: int, equity_usd: float). Public-ish for
+        # downstream tools (examples/backtest_momentum.py reads this).
+        self._equity_history: list[tuple[int, float]] = []
+        self._last_equity_snapshot_date: tuple[int, int, int] | None = None  # (year, month, day)
 
     # ---- lifecycle ----
 
@@ -57,6 +62,22 @@ class MomentumTopNStrategy(Strategy):
         cap = self.config.lookback_days + self.config.skip_days + 5
         if len(history) > cap:
             del history[0 : len(history) - cap]
+
+        # Daily equity snapshot — only on benchmark bars to dedupe across the
+        # 12-ticker universe (every business day sees one bar per ticker).
+        if ticker == self.config.benchmark:
+            year, month, day = self._year_month_day(bar.ts_event)
+            if self._last_equity_snapshot_date != (year, month, day):
+                self._last_equity_snapshot_date = (year, month, day)
+                try:
+                    venue = Venue(VENUE_MIC)
+                    account = self.portfolio.account(venue)
+                    if account is not None:
+                        eq_money = self.portfolio.equity(venue)[account.base_currency]
+                        self._equity_history.append((bar.ts_event, float(eq_money.as_decimal())))
+                except (KeyError, AttributeError, TypeError):
+                    # account / equity may be unavailable in very early bars before init
+                    pass
 
         # Rebalance check — only on tradeable-universe bars, only after warm-up,
         # only when this bar's month differs from the last rebalance month.
@@ -94,6 +115,12 @@ class MomentumTopNStrategy(Strategy):
         dt = datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc)
         return dt.year, dt.month
 
+    @staticmethod
+    def _year_month_day(ts_ns: int) -> tuple[int, int, int]:
+        from datetime import datetime, timezone
+        dt = datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc)
+        return dt.year, dt.month, dt.day
+
     def _rebalance(self, now_ts_ns: int) -> None:
         """Reconcile current holdings to the ranker's top-N target (equal-weight)."""
         self._rebalance_count += 1
@@ -116,9 +143,20 @@ class MomentumTopNStrategy(Strategy):
         account = self.portfolio.account(venue)
         equity_money = self.portfolio.equity(venue)[account.base_currency]
         equity_usd = float(equity_money.as_decimal())
-        per_name_usd = equity_usd / max(self.config.top_n, 1)
+        # Conservative 2% cash buffer: avoid AccountBalanceNegative on slippage + integer
+        # rounding when deploying ~100% of equity each rebalance.
+        per_name_usd = (equity_usd * 0.98) / max(self.config.top_n, 1)
 
         # 3. For each universe ticker, compute current signed shares + target shares + delta.
+        # Collect orders first so SELLs can be submitted before BUYs. On a CASH
+        # account the buy leg can only spend settled cash; if a rotation's BUY for a
+        # new name is submitted alongside (or before) the SELL that frees the cash,
+        # the account momentarily goes negative and the engine halts with
+        # AccountBalanceNegative. Submitting all SELLs first releases that cash for
+        # the BUYs. (A 2% buffer alone is insufficient here — the overrun is roughly
+        # one full position's notional, not a slippage-sized sliver.)
+        sells: list[tuple[InstrumentId, int]] = []
+        buys: list[tuple[InstrumentId, int]] = []
         for t in self.config.universe:
             instr_id = InstrumentId.from_str(f"{t}.{VENUE_MIC}")
             current = self._current_position_qty(instr_id)
@@ -130,12 +168,23 @@ class MomentumTopNStrategy(Strategy):
             delta = target - current
             if delta == 0:
                 continue
-            side = OrderSide.BUY if delta > 0 else OrderSide.SELL
-            qty = Quantity.from_int(abs(delta))
+            if delta > 0:
+                buys.append((instr_id, delta))
+            else:
+                sells.append((instr_id, -delta))
+
+        for instr_id, qty in sells:
             order = self.order_factory.market(
                 instrument_id=instr_id,
-                order_side=side,
-                quantity=qty,
+                order_side=OrderSide.SELL,
+                quantity=Quantity.from_int(qty),
+            )
+            self.submit_order(order)
+        for instr_id, qty in buys:
+            order = self.order_factory.market(
+                instrument_id=instr_id,
+                order_side=OrderSide.BUY,
+                quantity=Quantity.from_int(qty),
             )
             self.submit_order(order)
 
