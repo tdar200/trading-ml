@@ -24,15 +24,23 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Ensure the project root is on sys.path when the script is run directly
+# (e.g. `uv run python scripts/cross_check_yfinance.py`).
+_project_root = Path(__file__).parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 import pandas as pd
 import yfinance as yf
 from dotenv import load_dotenv
 from nautilus_trader.persistence.catalog.parquet import ParquetDataCatalog
 
+from data.instruments import VENUE_MIC
+
 
 def alpaca_closes_from_catalog(catalog_path: Path, ticker: str) -> pd.Series:
     catalog = ParquetDataCatalog(path=str(catalog_path))
-    bars = catalog.bars(instrument_ids=[f"{ticker}.ARCX"])
+    bars = catalog.bars(instrument_ids=[f"{ticker}.{VENUE_MIC}"])
     rows = [
         (pd.Timestamp(b.ts_event, unit="ns", tz="UTC").normalize(), float(b.close))
         for b in bars

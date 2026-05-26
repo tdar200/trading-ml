@@ -10,7 +10,7 @@ for the full design, philosophy, and staged roadmap.
 - [x] Stage 1 — Alpaca → Nautilus ParquetDataCatalog ingestion pipeline
   - [x] Data pipeline built and unit-tested (universe, instruments, bar converter,
         Alpaca client, idempotent + overlap-safe ingest orchestrator)
-  - [x] Live catalog populated (12 tickers, ~2020-07 → today on free-tier IEX).
+  - [x] Live catalog populated (12 tickers; SPY ~2018-11, sector ETFs ~2020-07 → today on free-tier IEX).
         Cross-check passes at 1.5% tolerance (free-tier IEX vs yfinance SIP venue
         noise — see design spec §7).
 - [ ] Stage 2 — First strategy (momentum top-N)

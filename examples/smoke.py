@@ -10,6 +10,15 @@ All API paths/signatures here match docs/nautilus_api_notes.md (verified
 against nautilus_trader==1.227.0), not memory.
 """
 
+import sys
+from pathlib import Path
+
+# Ensure the project root is on sys.path when the script is run directly
+# (e.g. `uv run python examples/smoke.py`).
+_project_root = Path(__file__).parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 from nautilus_trader.backtest.engine import BacktestEngine
 from nautilus_trader.config import BacktestEngineConfig, LoggingConfig, StrategyConfig
 from nautilus_trader.model.currencies import USD
@@ -19,6 +28,8 @@ from nautilus_trader.model.identifiers import InstrumentId, Symbol, TraderId, Ve
 from nautilus_trader.model.instruments import Equity
 from nautilus_trader.model.objects import Money, Price, Quantity
 from nautilus_trader.trading.strategy import Strategy
+
+from data.instruments import VENUE_MIC
 
 
 class LogBarsConfig(StrategyConfig, frozen=True):
@@ -41,7 +52,7 @@ def build_spy_instrument() -> Equity:
     # optional and default to 0/None.
     ts = 1_700_000_000_000_000_000  # arbitrary UNIX nanoseconds
     return Equity(
-        instrument_id=InstrumentId.from_str("SPY.ARCX"),
+        instrument_id=InstrumentId.from_str(f"SPY.{VENUE_MIC}"),
         raw_symbol=Symbol("SPY"),
         currency=USD,
         price_precision=2,
@@ -82,7 +93,7 @@ def main() -> None:
     )
     engine = BacktestEngine(config=config)
 
-    venue = Venue("ARCX")
+    venue = Venue(VENUE_MIC)
     engine.add_venue(
         venue=venue,
         oms_type=OmsType.NETTING,

@@ -47,7 +47,7 @@ def latest_ingested_date(catalog_path: Path, ticker: str) -> datetime | None:
     if not catalog_path.exists():
         return None
     catalog = _catalog(catalog_path)
-    instrument_id = f"{ticker}.ARCX"
+    instrument_id = f"{ticker}.{VENUE_MIC}"
     try:
         bars = catalog.bars(instrument_ids=[instrument_id])
     except Exception:
