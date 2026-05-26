@@ -297,8 +297,8 @@ engine.add_venue(
     venue=Venue("ARCX"),
     oms_type=OmsType.NETTING,        # OmsType: UNSPECIFIED | NETTING | HEDGING
     account_type=AccountType.CASH,   # AccountType: CASH | MARGIN | BETTING | WALLET
+    starting_balances=[Money(100_000, USD)],   # list[Money]  — positional order is (starting_balances, base_currency); pass as keyword args
     base_currency=USD,
-    starting_balances=[Money(100_000, USD)],   # list[Money]
 )
 ```
 
