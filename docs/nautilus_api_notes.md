@@ -328,7 +328,366 @@ Full minimal backtest (engine config -> add_venue -> add_instrument -> add_data 
 add_strategy(Strategy()) -> run -> read `portfolio.account(venue).balance_total(USD)`) was
 **run end-to-end and produced `100000.00 USD`** with a no-op strategy.
 
-## 9. Enums (verified members)
+## 9. Strategy + Order + Portfolio + FillModel (Stage 2)
+
+> Every signature and result below was confirmed by `inspect.signature`, the Cython-embedded
+> docstring, **and** an end-to-end backtest in this env that placed a market buy, filled it, and
+> read back the position quantity and the changed account balance (snippet at end of §9).
+> Verified 2026-05-26 against `nautilus_trader==1.227.0`.
+
+### 9.1 Imports (all verified)
+
+```python
+from nautilus_trader.trading.strategy import Strategy
+from nautilus_trader.config import StrategyConfig
+from nautilus_trader.model.orders import MarketOrder            # the returned type
+from nautilus_trader.model.enums import OrderSide, TimeInForce
+from nautilus_trader.backtest.models import FillModel
+from nautilus_trader.model.objects import Quantity, Price, Money
+from nautilus_trader.model.currencies import USD
+```
+
+### 9.2 Strategy lifecycle hooks (verified members on the `Strategy` class)
+
+All discovered `on_*` hooks in v1.227:
+
+```
+on_bar                  on_data                 on_degrade
+on_dispose              on_event                on_fault
+on_funding_rate         on_historical_data      on_index_price
+on_instrument           on_instrument_close     on_instrument_status
+on_load                 on_mark_price           on_market_exit
+on_option_chain         on_option_greeks
+on_order_accepted       on_order_book           on_order_book_deltas
+on_order_book_depth     on_order_cancel_rejected  on_order_canceled
+on_order_denied         on_order_emulated       on_order_event
+on_order_expired        on_order_filled         on_order_initialized
+on_order_modify_rejected  on_order_pending_cancel  on_order_pending_update
+on_order_rejected       on_order_released       on_order_submitted
+on_order_triggered      on_order_updated
+on_position_changed     on_position_closed      on_position_event
+on_position_opened      on_quote_tick           on_reset
+on_resume               on_save                 on_signal
+on_start                on_stop                 on_trade_tick
+```
+
+Hooks Stage 2 actually uses (verified by end-to-end run):
+
+| Hook        | When it fires                                              |
+|-------------|------------------------------------------------------------|
+| `on_start`  | Once at strategy startup — **subscribe bars here**.        |
+| `on_bar`    | Each new `Bar` for any subscribed `BarType`.               |
+| `on_stop`   | Once on graceful shutdown — for cleanup / unsubscribes.    |
+| `on_reset`  | When engine state is reset between runs.                    |
+
+Bar subscription idiom (called from `on_start`):
+
+```python
+def on_start(self) -> None:
+    self.subscribe_bars(self.config.bar_type)   # bar_type: BarType
+```
+
+### 9.3 `self` attributes available inside a Strategy (verified by `dir(Strategy)`)
+
+| Attribute / method     | Type / use                                                   |
+|------------------------|--------------------------------------------------------------|
+| `self.config`          | The `StrategyConfig` instance you constructed the strategy with. |
+| `self.log`             | Logger with methods: `info`, `debug`, `warning`, `error`, `exception`. Use `self.log.info("msg")`. |
+| `self.cache`           | The shared `Cache` (positions, orders, instruments, accounts, bars). |
+| `self.portfolio`       | `Portfolio` — read `account(venue)`, `net_position(...)`, P&L. |
+| `self.clock`           | `Clock`; `self.clock.timestamp_ns()` → `uint64` UNIX nanoseconds (also `timestamp`, `timestamp_ms`, `timestamp_us`, `utc_now()`). |
+| `self.order_factory`   | `OrderFactory` — has `.market(...)`, `.limit(...)`, etc.     |
+| `self.submit_order(o)` | Submits a single `Order` to the engine.                      |
+| `self.submit_order_list(ol)` | Submits an `OrderList` (multiple orders).              |
+| `self.cancel_order`, `self.cancel_all_orders`, `self.close_position`, `self.close_all_positions` | Standard order/position management. |
+| `self.subscribe_bars(bar_type)` | Subscribe to a `BarType`.                           |
+
+### 9.4 `order_factory.market(...)` — exact verified signature
+
+From `inspect.signature(OrderFactory.market)`:
+
+```
+market(self,
+       instrument_id: InstrumentId,
+       order_side: OrderSide,
+       quantity: Quantity,
+       time_in_force: TimeInForce = TimeInForce.GTC,
+       reduce_only: bool = False,
+       quote_quantity: bool = False,
+       exec_algorithm_id: ExecAlgorithmId | None = None,
+       exec_algorithm_params: dict | None = None,
+       tags: list[str] | None = None,
+       client_order_id: ClientOrderId | None = None) -> MarketOrder
+```
+
+Stage-2 idiom (only the three required args; `time_in_force` defaults to `GTC`):
+
+```python
+order = self.order_factory.market(
+    instrument_id=self.config.instrument_id,
+    order_side=OrderSide.BUY,         # or OrderSide.SELL
+    quantity=Quantity.from_int(100),
+)
+self.submit_order(order)              # the actual submission call
+```
+
+Raises `ValueError` if `quantity <= 0` or `time_in_force == GTD`.
+
+### 9.5 Querying the current position
+
+**Key finding:** there is **no `position_for_instrument_id` / `position_for_instrument`** in v1.227.
+The verified API is `Cache.positions_open(...)` (or `Cache.positions(...)`), which returns a
+**list** — filter by `instrument_id`:
+
+```
+positions_open(self,
+               venue: Venue | None = None,
+               instrument_id: InstrumentId | None = None,
+               strategy_id: StrategyId | None = None,
+               side: PositionSide = PositionSide.NO_POSITION_SIDE,  # i.e. no filter
+               account_id: AccountId | None = None) -> list[Position]
+```
+
+Idiom inside a Strategy:
+
+```python
+positions = self.cache.positions_open(instrument_id=self.config.instrument_id)
+position = positions[0] if positions else None   # None when flat
+```
+
+Other useful methods on `Cache` related to positions (verified to exist):
+`positions(...)`, `positions_closed(...)`, `position(position_id)`, `position_for_order(client_order_id)`,
+`positions_open_count(...)`, `is_position_open(position_id)`, `position_exists(position_id)`.
+
+Verified `Position` fields (from the end-to-end run, long 100 @ 50.21):
+
+| field            | example value           | notes                                            |
+|------------------|-------------------------|--------------------------------------------------|
+| `quantity`       | `Quantity(100)`         | **unsigned** absolute size.                      |
+| `signed_qty`     | `100.0` (float)         | **signed** — positive long, negative short.      |
+| `side`           | `PositionSide.LONG`     | enum: `LONG`, `SHORT`, `FLAT`, `NO_POSITION_SIDE`. |
+| `avg_px_open`    | `50.21`                 | average entry price (float).                     |
+| `is_long`        | `True`                  |                                                  |
+| `is_short`       | `False`                 |                                                  |
+| `instrument_id`  | `TEST.ARCX`             |                                                  |
+
+For "am I flat?" use `positions_open(instrument_id=...)` returning `[]` (preferred), or
+`self.portfolio.is_flat(instrument_id)` / `self.portfolio.net_position(instrument_id)`.
+
+### 9.6 Querying account equity
+
+```python
+venue = self.config.instrument_id.venue       # or a stored Venue
+account = self.portfolio.account(venue)       # -> CashAccount (or MarginAccount)
+base_ccy = account.base_currency              # Currency object, e.g. USD
+balance: Money = account.balance_total(base_ccy)   # 94979.00 USD
+equity_decimal = balance.as_decimal()         # decimal.Decimal('94979.00')   for math
+```
+
+Also verified to exist on the account object:
+
+- `account.balance_free(currency)` → `Money` — cash available (not locked by open orders).
+- `account.balance_locked(currency)` → `Money` — cash currently held against open orders.
+- `account.base_currency` → `Currency` (the venue's base currency; pass this into `balance_total`).
+- `account.id` → `AccountId` (e.g. `ARCX-001`).
+- `account.events` → `list[AccountState]`.  **Two snapshots after one fill** in the test run:
+  pre-fill `total=100_000.00 USD`, post-fill `total=94_979.00 USD`.
+
+`balance_total(...)` returns a `Money`; extract its magnitude via either `.as_decimal()` (returns
+`decimal.Decimal`) or `.as_double()` (returns `float`). `.as_decimal()` is preferred for any P&L
+math to preserve precision.
+
+### 9.7 Account-state time-series (for tearsheet equity curve)
+
+**There is no built-in per-bar equity time-series API on `Cache` in v1.227.** What exists:
+
+- `engine.cache.accounts()` → `list[Account]` (one per venue; current state only, no history).
+- `account.events` → `list[AccountState]` where each `AccountState` has `ts_event` and
+  `balances` (a list of `AccountBalance(total, locked, free)` per currency). **This is the
+  closest thing to a time-series.** In the recon run it contained 2 entries: the initial
+  funding and the post-fill state. Each fill (or other account change) appends one event.
+
+Verified `AccountState` public attrs: `account_id`, `account_type`, `balances`, `base_currency`,
+`info`, `is_reported`, `margins`, `ts_event`, `ts_init`, plus `to_dict()` / `from_dict()`.
+
+**For the Stage 2 tearsheet (Task 11)** the practical equity-curve reconstruction is:
+
+Option A (preferred — event-driven, exact):
+```python
+account = engine.portfolio.account(venue)
+rows = []
+for ev in account.events:                    # already in chronological order
+    bal = next(b for b in ev.balances if b.currency == account.base_currency)
+    rows.append((ev.ts_event, float(bal.total.as_decimal())))
+# rows is [(ts_ns, equity_usd), ...]
+```
+This yields equity at every account state change (i.e. every fill / funding event), not at every
+bar — but for daily-bar Stage 2 with one rebalance per month it is sufficient.
+
+Option B (per-bar mark-to-market): reconstruct by combining `engine.cache.bars(bar_type)` with
+`engine.cache.orders()` (which exposes each order's `events` list, including `OrderFilled`
+events with `last_qty`, `last_px`, `ts_event`). This is needed only if the tearsheet wants
+daily resolution; otherwise stick with Option A.
+
+Note: `engine.cache.position_snapshots()` returns `[]` unless `ExecEngine` is configured with
+`snapshot_positions=True` (default `False`). Same for `snapshot_orders=False`. If we ever turn
+these on, snapshots become persisted and queryable.
+
+### 9.8 `FillModel` for slippage
+
+```python
+from nautilus_trader.backtest.models import FillModel
+fill_model = FillModel(
+    prob_fill_on_limit=1.0,   # P(limit order fills when market rests on its price)
+    prob_slippage=1.0,        # P(market/aggressor fill slips by ONE TICK)
+    random_seed=42,           # int | None
+)
+```
+
+Verified Cython docstring:
+
+```
+FillModel(double prob_fill_on_limit=1.0,
+          double prob_slippage=0.0,
+          int random_seed: int | None = None,
+          config=None) -> None
+```
+
+**Critical: `prob_slippage` is a Bernoulli probability of slipping, and the slip magnitude is
+exactly one tick — NOT configurable.** Confirmed empirically:
+
+| `prob_slippage` | fill price | balance after 100-share buy |
+|-----------------|------------|-----------------------------|
+| `0.0`           | `50.20`    | `94980.00 USD`              |
+| `1.0`           | `50.21`    | `94979.00 USD`              |
+
+Difference: exactly `$0.01` per share = one tick (`price_increment=0.01`) × 100 shares = `$1.00`.
+
+So for a Stage 2 ETF (~$50 share price, $0.01 tick):
+- one tick = $0.01 ≈ **2.0 bps** of $50
+- nominal Stage 2 target was 0.5 bps ≈ $0.0025 per share — **below one tick**.
+- v1.227's `FillModel` cannot directly express 0.5 bps; the closest available models are:
+  - `prob_slippage=0.0` (no slippage, 0 bps)
+  - `prob_slippage=0.25` (one tick on ~25 % of fills ≈ 0.5 bps average) — **stochastic, only an average match**
+  - `prob_slippage=1.0` (always one tick, ≈ 2 bps)
+
+`nautilus_trader.backtest.models` also exposes a dedicated `OneTickSlippageFillModel` that forces
+exactly one tick of slippage deterministically:
+
+```python
+from nautilus_trader.backtest.models import OneTickSlippageFillModel
+fill_model = OneTickSlippageFillModel()
+```
+
+**Wiring into the engine** — `BacktestEngine.add_venue(..., fill_model=...)` (verified kwarg name):
+
+```python
+engine.add_venue(
+    venue=Venue("ARCX"),
+    oms_type=OmsType.NETTING,
+    account_type=AccountType.CASH,
+    starting_balances=[Money(100_000, USD)],
+    base_currency=USD,
+    fill_model=fill_model,                # <-- here
+)
+```
+
+### 9.9 Complete end-to-end snippet (this ran; balance changed; position confirmed)
+
+```python
+from nautilus_trader.backtest.engine import BacktestEngine
+from nautilus_trader.backtest.models import FillModel
+from nautilus_trader.config import BacktestEngineConfig, LoggingConfig, StrategyConfig
+from nautilus_trader.model.currencies import USD
+from nautilus_trader.model.data import Bar, BarType
+from nautilus_trader.model.enums import AccountType, OmsType, OrderSide
+from nautilus_trader.model.identifiers import InstrumentId, Symbol, TraderId, Venue
+from nautilus_trader.model.instruments import Equity
+from nautilus_trader.model.objects import Money, Price, Quantity
+from nautilus_trader.trading.strategy import Strategy
+
+
+class DemoConfig(StrategyConfig, frozen=True):
+    instrument_id: InstrumentId
+    bar_type: BarType
+    trade_size: int = 100
+
+
+class DemoStrategy(Strategy):
+    def __init__(self, config: DemoConfig) -> None:
+        super().__init__(config=config)
+        self._placed = False
+
+    def on_start(self) -> None:
+        self.subscribe_bars(self.config.bar_type)
+
+    def on_bar(self, bar: Bar) -> None:
+        if not self._placed:
+            order = self.order_factory.market(
+                instrument_id=self.config.instrument_id,
+                order_side=OrderSide.BUY,
+                quantity=Quantity.from_int(self.config.trade_size),
+            )
+            self.submit_order(order)
+            self._placed = True
+
+
+engine = BacktestEngine(config=BacktestEngineConfig(
+    trader_id=TraderId("BACKTESTER-001"),
+    logging=LoggingConfig(bypass_logging=True),
+))
+venue = Venue("ARCX")
+engine.add_venue(
+    venue=venue, oms_type=OmsType.NETTING, account_type=AccountType.CASH,
+    starting_balances=[Money(100_000, USD)], base_currency=USD,
+    fill_model=FillModel(prob_fill_on_limit=1.0, prob_slippage=1.0, random_seed=42),
+)
+ts = 1_700_000_000_000_000_000
+iid = InstrumentId.from_str("TEST.ARCX")
+engine.add_instrument(Equity(
+    instrument_id=iid, raw_symbol=Symbol("TEST"), currency=USD,
+    price_precision=2, price_increment=Price.from_str("0.01"),
+    lot_size=Quantity.from_int(1), ts_event=ts, ts_init=ts,
+))
+bt = BarType.from_str("TEST.ARCX-1-DAY-LAST-EXTERNAL")
+ONE_DAY_NS = 24 * 60 * 60 * 1_000_000_000
+bars = []
+for i in range(10):
+    o = 50.00 + 0.10 * i
+    bars.append(Bar(
+        bar_type=bt,
+        open=Price.from_str(f"{o:.2f}"), high=Price.from_str(f"{o + 0.50:.2f}"),
+        low=Price.from_str(f"{o - 0.30:.2f}"), close=Price.from_str(f"{o + 0.20:.2f}"),
+        volume=Quantity.from_int(1_000_000),
+        ts_event=ts + i * ONE_DAY_NS, ts_init=ts + i * ONE_DAY_NS,
+    ))
+engine.add_data(bars)
+engine.add_strategy(DemoStrategy(config=DemoConfig(instrument_id=iid, bar_type=bt)))
+engine.run()
+
+# Post-run reads (verified output values shown in comments):
+account = engine.portfolio.account(venue)
+print(account.balance_total(account.base_currency))            # -> 94979.00 USD
+print(account.balance_total(account.base_currency).as_decimal())  # -> Decimal('94979.00')
+
+positions = engine.cache.positions_open(instrument_id=iid)
+p = positions[0]
+print(p.quantity, p.signed_qty, p.side, p.avg_px_open)         # -> 100 100.0 2 50.21
+# p.side is PositionSide.LONG (=2); use `p.side == PositionSide.LONG`, not the repr.
+
+# Equity time series (Option A — per account-state event):
+for ev in account.events:
+    bal = next(b for b in ev.balances if b.currency == account.base_currency)
+    print(ev.ts_event, float(bal.total.as_decimal()))
+# -> 1700000000000000000 100000.0
+# -> 1700000000000000000 94979.0
+
+engine.dispose()
+```
+
+---
+
+## 10. Enums (verified members)
 
 ```python
 from nautilus_trader.model.enums import AccountType, OmsType, AggregationSource
@@ -337,8 +696,18 @@ from nautilus_trader.model.enums import AccountType, OmsType, AggregationSource
 # AggregationSource:  EXTERNAL (=1), INTERNAL (=2)
 ```
 
-## 10. Summary for downstream tasks
+Stage 2 additions:
 
+```python
+from nautilus_trader.model.enums import OrderSide, TimeInForce, PositionSide
+# OrderSide:     NO_ORDER_SIDE, BUY, SELL
+# TimeInForce:   GTC (default), IOC, FOK, GTD, DAY, AT_THE_OPEN, AT_THE_CLOSE
+# PositionSide:  NO_POSITION_SIDE (filter sentinel), FLAT, LONG, SHORT
+```
+
+## 11. Summary for downstream tasks
+
+Stage 1:
 - **Task 3 (smoke backtest):** use the §8 skeleton; balance read via
   `engine.portfolio.account(venue).balance_total(USD)`.
 - **Task 5 (Equity builder):** §5 — only 8 required args; `isin`/fees/margins all optional.
@@ -346,3 +715,21 @@ from nautilus_trader.model.enums import AccountType, OmsType, AggregationSource
   timestamps in **UNIX nanoseconds**.
 - **Task 8 (catalog write/query):** §7 — `catalog.write_data([...])` for both instruments and
   bars; query bars via `catalog.bars(instrument_ids=["SPY.ARCX"])` (strings, not objects).
+
+Stage 2:
+- **Task 4 (Strategy skeleton):** §9.2–9.4 — subscribe in `on_start`, trade in `on_bar`,
+  build orders via `self.order_factory.market(instrument_id, order_side, quantity)`,
+  submit via `self.submit_order(order)`. Config via `class FooConfig(StrategyConfig, frozen=True)`.
+- **Task 7 (Position reconciliation):** §9.5 — query with
+  `self.cache.positions_open(instrument_id=iid)`; flat ⇔ list is empty.
+  Use `position.signed_qty` (positive long, negative short) when computing target-vs-actual deltas.
+- **Task 9 (FillModel slippage helper):** §9.8 — `FillModel(prob_fill_on_limit=1.0,
+  prob_slippage=p, random_seed=seed)` wired via `add_venue(fill_model=...)`. Slip magnitude is
+  **fixed at one tick**; only the probability is tunable. For 0.5 bps nominal on ~$50 ETFs use
+  `prob_slippage ≈ 0.25` (stochastic ~0.5 bps average), or `OneTickSlippageFillModel()` for
+  deterministic ~2 bps. **Document the chosen value in code comments.**
+- **Task 11 (Live backtest entry point / tearsheet):** §9.6–9.7 — read final equity via
+  `engine.portfolio.account(venue).balance_total(account.base_currency).as_decimal()`. For the
+  equity curve, prefer `account.events` (`AccountState.ts_event` + `balances`) which gives a
+  fill-resolution time series; supplement with `engine.cache.orders()[*].events` for per-fill
+  detail if needed. **No `account_states_for_venue` / built-in equity time-series API exists.**
