@@ -17,8 +17,13 @@ for the full design, philosophy, and staged roadmap.
   - [x] Pure ranker + Nautilus Strategy (monthly top-3 by 6m-skip-1 momentum) + quantstats tearsheet
   - [x] Acceptance backtest: `uv run python examples/backtest_momentum.py`
   - On the ~2020-07→2026 window the simple momentum strategy underperformed SPY buy-and-hold (≈9% vs ≈21% CAGR) — the expected honest baseline per the design spec; the milestone is a credible, reproducible tearsheet, not beating SPY.
-- [ ] Stage 3 — Honesty harness (walk-forward, Deflated Sharpe, cost stress)
-- [ ] Stages 4–8 — see design spec
+- [x] Stage 3 — Honesty harness (walk-forward × param grid + Deflated Sharpe + cost stress)
+  - [x] `analysis/{runspec,deflated_sharpe,metrics,runner,walk_forward,costs,harness_report}.py`
+  - [x] Runnable: `uv run python examples/run_harness.py` (full) or `--smoke` (dev iteration)
+  - [x] Acceptance run: 90 walk-forward + 4 cost-stress backtests over the full catalog. Winner: `top_n=3, lookback_days=63, skip_days=0` (3-month momentum without skip — different from Stage 2's hardcoded baseline). Winner median window Sharpe 1.02 (range [0.88, 1.68]); cluster of similarly-good configs (5-95th percentile of all combo-window Sharpes: [0.41, 1.66]); CAGR ≈16% across slippage 0→2 bps (robust to costs); Deflated Sharpe p=1.00, z=23.33 with n_trials=90 — the winner's Sharpe is unlikely to be pure selection bias.
+  - The harness winner still underperforms SPY in CAGR (≈16% vs ≈21%) but has comparable risk-adjusted return (Sharpe ≈1.03 vs SPY ≈1.10) and a better max drawdown (-18% vs -25%). Honest characterization, not a deployment signal.
+- [ ] Stage 4 — Sim-live loop
+- [ ] Stages 5–8 — see design spec
 
 ## Setup
 
@@ -61,6 +66,17 @@ uv run python examples/backtest_momentum.py
 
 Writes `equity.csv`, `spy_close.csv`, and `tearsheet.html` to `results/momentum_topn_<timestamp>/`.
 Prints a CAGR / Sharpe / max-drawdown summary for the strategy vs SPY.
+
+### Honesty harness
+
+```bash
+# Stage 3: walk-forward × parameter grid + Deflated Sharpe + cost stress
+uv run python examples/run_harness.py            # full battery (90 + 4 backtests, ~1 min with Nautilus caching)
+uv run python examples/run_harness.py --smoke    # tiny grid (~5 sec) for dev iteration
+```
+
+Writes `walk_forward.csv`, `cost_stress.csv`, `summary.json`, `summary.md` to `results/harness_<timestamp>/`.
+Prints the 5-section Markdown verdict (time stability / parameter robustness / cost survival / Deflated Sharpe / bottom line).
 
 ## Layout
 
