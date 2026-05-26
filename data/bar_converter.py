@@ -36,7 +36,7 @@ def alpaca_df_to_bars(df: pd.DataFrame, ticker: str) -> list[Bar]:
     if ticker not in df.index.get_level_values(0):
         return []
 
-    rows = df.xs(ticker, level=0)
+    rows = df.xs(ticker, level=0).sort_index()
     bar_type = _bar_type_for(ticker)
     bars: list[Bar] = []
     for ts, row in rows.iterrows():

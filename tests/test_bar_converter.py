@@ -56,3 +56,12 @@ def test_converter_empty_df_returns_empty_list():
         index=pd.MultiIndex.from_tuples([], names=["symbol", "timestamp"]),
     )
     assert alpaca_df_to_bars(empty, "SPY") == []
+
+
+def test_converter_sorts_unsorted_input(sample_alpaca_bars_df):
+    # Reverse the row order; converter must still return bars in ascending time order.
+    reversed_df = sample_alpaca_bars_df.iloc[::-1]
+    bars = alpaca_df_to_bars(reversed_df, "SPY")
+    ts = [b.ts_event for b in bars]
+    assert ts == sorted(ts), "converter must return bars in ascending timestamp order regardless of input order"
+    assert len(bars) == 3
