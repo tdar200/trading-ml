@@ -8,7 +8,7 @@ by a probability (seeded for determinism).
 
 The fill-price decision is extracted into the pure ``compute_fill_price``
 helper for unit testability. The full async order-fill cycle is exercised
-in Task 8's TradingNode integration test (not here).
+in Task 8's TradingNode integration test.
 
 Per §12.5 of ``docs/nautilus_api_notes.md``:
 
@@ -25,17 +25,40 @@ Per §12.5 of ``docs/nautilus_api_notes.md``:
   ``self.generate_order_filled(strategy_id, instrument_id, client_order_id,
   venue_order_id, venue_position_id, trade_id, order_side, order_type,
   last_qty, last_px, quote_currency, commission, liquidity_side, ts_event,
-  info=None)``. Task 8 wires this end-to-end; Task 5 leaves it stubbed.
+  info=None)``.
+
+To produce equity that mirrors ``BacktestEngine``'s cash-account behaviour
+we additionally:
+
+- Register the venue as a "calculated account" with ``AccountFactory`` so
+  the engine recomputes balances from OrderFilled events (see
+  ``BacktestExecClient.__init__`` for the equivalent in the backtest path).
+- Publish an initial ``AccountState`` with the configured starting balance
+  at connect time (``BacktestEngine`` does this in
+  ``SimulatedExchange.initialize_account`` via the same
+  ``generate_account_state`` helper).
+- Subscribe to ``data.bars.*`` on the message bus so the same bars the
+  strategy sees also drive fills here.
+- For every submitted order, generate the full lifecycle: submitted →
+  accepted → filled. The exec engine refuses to fill an order that wasn't
+  previously accepted (it logs "Cannot apply event to any order").
 """
 from __future__ import annotations
 
 import random
 from decimal import Decimal
 
+from nautilus_trader.accounting.factory import AccountFactory
+from nautilus_trader.core.uuid import UUID4
 from nautilus_trader.live.execution_client import LiveExecutionClient
 from nautilus_trader.model.data import Bar
-from nautilus_trader.model.enums import OrderSide
-from nautilus_trader.model.identifiers import AccountId
+from nautilus_trader.model.enums import LiquiditySide, OrderSide, OrderType
+from nautilus_trader.model.identifiers import (
+    AccountId,
+    TradeId,
+    VenueOrderId,
+)
+from nautilus_trader.model.objects import AccountBalance, Money
 
 
 def compute_fill_price(
@@ -68,10 +91,11 @@ class SimulatedLiveExecutionClient(LiveExecutionClient):
     """Simulated live exec client — fills pending orders at the next bar's open.
 
     Constructor accepts Stage-4-specific kwargs (``slippage_prob``,
-    ``random_seed``) plus the base-class kwargs forwarded via ``**kwargs``
-    (``loop``, ``client_id``, ``venue``, ``oms_type``, ``account_type``,
-    ``base_currency``, ``instrument_provider``, ``msgbus``, ``cache``,
-    ``clock``, ``config``) — see §12.5 for the verified signature.
+    ``random_seed``, ``starting_balance_usd``) plus the base-class kwargs
+    forwarded via ``**kwargs`` (``loop``, ``client_id``, ``venue``,
+    ``oms_type``, ``account_type``, ``base_currency``, ``instrument_provider``,
+    ``msgbus``, ``cache``, ``clock``, ``config``) — see §12.5 for the
+    verified signature.
     """
 
     def __init__(
@@ -79,38 +103,96 @@ class SimulatedLiveExecutionClient(LiveExecutionClient):
         *,
         slippage_prob: float = 0.25,
         random_seed: int = 42,
+        starting_balance_usd: int = 100_000,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self._slippage_prob = slippage_prob
         self._rng = random.Random(random_seed)
+        self._starting_balance_usd = starting_balance_usd
         # ticker (string prefix of the InstrumentId, e.g. "SPY") → pending orders
         self._pending: dict[str, list] = {}
+        # Monotonic counter for generating unique VenueOrderId / TradeId values.
+        self._venue_order_seq: int = 0
+        self._trade_seq: int = 0
+        # Diagnostic counters (read by Task 8 integration test on failure).
+        self._bars_received: int = 0
+        self._fills_emitted: int = 0
+        # Per §12.5: issuer of AccountId MUST equal ``client_id.value`` —
+        # ``self.id`` is the ClientId.
+        self._set_account_id(AccountId(f"{self.id.value}-001"))
+        # Register the account as "calculated" — the engine recomputes
+        # balances from OrderFilled events instead of waiting for an
+        # external venue report. Mirrors ``BacktestExecClient.__init__``.
+        # Idempotent guard: this is a module-global registry and re-registering
+        # the same issuer raises ``KeyError`` (see ``AccountFactory``).
+        try:
+            AccountFactory.register_calculated_account(self.id.value)
+        except KeyError:
+            # Already registered in an earlier test in the same process.
+            pass
 
     # ------------------------------------------------------------------
     # LiveExecutionClient required overrides (§12.5)
     # ------------------------------------------------------------------
 
     async def _connect(self) -> None:
-        # Per §12.5: issuer of AccountId MUST equal ``client_id.value`` —
-        # ``self.id`` is the ClientId (verified via dir(LiveExecutionClient)).
-        account_id = AccountId(f"{self.id.value}-001")
-        self._set_account_id(account_id)
+        # Publish the initial AccountState so the portfolio can register the
+        # cash account before any fills arrive. Mirrors
+        # ``SimulatedExchange._generate_fresh_account_state``.
+        starting = Money(self._starting_balance_usd, self.base_currency)
+        zero = Money(0, self.base_currency)
+        self.generate_account_state(
+            balances=[AccountBalance(total=starting, locked=zero, free=starting)],
+            margins=[],
+            reported=True,
+            ts_event=self._clock.timestamp_ns(),
+        )
+        # Subscribe to all bar events on the msgbus — see §12.4: bars are
+        # published to ``data.bars.<bar_type>`` after the data engine routes
+        # them through. Equivalent to ``SandboxExecutionClient.connect``'s
+        # ``data.*.{venue}.*`` subscription, but bar-typed.
+        self._msgbus.subscribe(topic="data.bars.*", handler=self._on_bar)
         self._set_connected(True)
 
     async def _disconnect(self) -> None:
         self._set_connected(False)
 
     async def _submit_order(self, command) -> None:
-        """Record the order as pending; fill is emitted on the next bar.
+        """Record the order as pending and emit the submitted/accepted events.
 
-        The command is a ``SubmitOrder`` message (§12.5) with an ``.order``
+        The exec engine only accepts an OrderFilled against an order that is
+        already in the ACCEPTED state — without these two prior events the
+        fill is dropped with "Cannot apply event to any order". So we emit
+        them inline at submit time, then defer the fill itself to the next bar.
+
+        ``command`` is a ``SubmitOrder`` message (§12.5) with an ``.order``
         attribute. The fall-through ``else`` branch tolerates being handed a
         bare ``Order`` for ease of unit-testing.
         """
         order = command.order if hasattr(command, "order") else command
+        ts_event = self._clock.timestamp_ns()
+        self._venue_order_seq += 1
+        venue_order_id = VenueOrderId(f"V-{self._venue_order_seq}")
+
+        self.generate_order_submitted(
+            strategy_id=order.strategy_id,
+            instrument_id=order.instrument_id,
+            client_order_id=order.client_order_id,
+            ts_event=ts_event,
+        )
+        self.generate_order_accepted(
+            strategy_id=order.strategy_id,
+            instrument_id=order.instrument_id,
+            client_order_id=order.client_order_id,
+            venue_order_id=venue_order_id,
+            ts_event=ts_event,
+        )
+
         ticker = str(order.instrument_id).split(".")[0]
-        self._pending.setdefault(ticker, []).append(order)
+        # Store the order with its assigned venue_order_id so the fill can
+        # reference it back.
+        self._pending.setdefault(ticker, []).append((order, venue_order_id))
 
     async def _cancel_order(self, command) -> None:
         # No-op for the sim: fills happen on the very next bar so a real
@@ -141,21 +223,25 @@ class SimulatedLiveExecutionClient(LiveExecutionClient):
         return None
 
     # ------------------------------------------------------------------
-    # Bar handler — wired to the data client's bar stream in Task 8.
+    # Bar handler — wired to ``data.bars.*`` in ``_connect``.
     # ------------------------------------------------------------------
 
     def _on_bar(self, bar: Bar) -> None:
         """Fill any pending orders for this bar's instrument at the bar's open.
 
-        Wired by Task 8's integration test once the TradingNode + data + exec
-        + strategy graph is in place. See ``_emit_fill`` below for the
-        deferred ``generate_order_filled`` wiring.
+        Wired in ``_connect`` to the ``data.bars.*`` msgbus topic; the data
+        client emits via ``self._handle_data`` which the data engine then
+        publishes to this topic.
         """
+        if not isinstance(bar, Bar):
+            return
+        self._bars_received += 1
         ticker = str(bar.bar_type).split(".")[0]
         if ticker not in self._pending:
             return
         pending_orders = self._pending.pop(ticker)
-        for order in pending_orders:
+        for order, venue_order_id in pending_orders:
+            self._fills_emitted += 1
             slip_ticks = 1 if self._rng.random() < self._slippage_prob else 0
             fill_price = compute_fill_price(
                 bar=bar,
@@ -163,20 +249,52 @@ class SimulatedLiveExecutionClient(LiveExecutionClient):
                 slippage_ticks=slip_ticks,
                 tick_size=_DEFAULT_TICK_SIZE,
             )
-            self._emit_fill(order, fill_price=fill_price, bar=bar)
+            self._emit_fill(
+                order=order,
+                venue_order_id=venue_order_id,
+                fill_price=fill_price,
+                bar=bar,
+            )
 
-    def _emit_fill(self, order, fill_price: Decimal, bar: Bar) -> None:
+    def _emit_fill(
+        self,
+        order,
+        venue_order_id: VenueOrderId,
+        fill_price: Decimal,
+        bar: Bar,
+    ) -> None:
         """Emit OrderFilled via ``self.generate_order_filled`` per §12.5.
 
-        Implementation deferred to Task 8 integration — the full 15-arg
-        ``generate_order_filled`` signature needs the right command-level
-        info (venue_order_id, trade_id, commission, liquidity_side, …) which
-        is most naturally wired when the integration test exercises it
-        end-to-end.
+        Commission is zero (Equity instruments default to maker/taker fee = 0;
+        the backtest path uses ``MakerTakerFeeModel`` which also returns 0 for
+        equities). Liquidity side is TAKER (market orders cross the spread).
         """
-        raise NotImplementedError(
-            "Wire to self.generate_order_filled(strategy_id, instrument_id, "
-            "client_order_id, venue_order_id, venue_position_id, trade_id, "
-            "order_side, order_type, last_qty, last_px, quote_currency, "
-            "commission, liquidity_side, ts_event, info=None) per §12.5"
+        instrument = self._cache.instrument(order.instrument_id)
+        quote_currency = instrument.quote_currency if instrument is not None else self.base_currency
+        # Quantize the fill price to the instrument's price increment so the
+        # ``Price`` constructor doesn't raise on extra precision.
+        if instrument is not None:
+            last_px = instrument.make_price(fill_price)
+        else:
+            from nautilus_trader.model.objects import Price  # local import to avoid top-level dep
+            last_px = Price(fill_price, precision=2)
+
+        self._trade_seq += 1
+        trade_id = TradeId(f"T-{self._trade_seq}-{UUID4().value[:8]}")
+
+        self.generate_order_filled(
+            strategy_id=order.strategy_id,
+            instrument_id=order.instrument_id,
+            client_order_id=order.client_order_id,
+            venue_order_id=venue_order_id,
+            venue_position_id=None,
+            trade_id=trade_id,
+            order_side=order.side,
+            order_type=OrderType.MARKET,
+            last_qty=order.quantity,
+            last_px=last_px,
+            quote_currency=quote_currency,
+            commission=Money(0, quote_currency),
+            liquidity_side=LiquiditySide.TAKER,
+            ts_event=bar.ts_event,
         )

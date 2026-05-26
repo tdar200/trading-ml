@@ -135,13 +135,31 @@ class CatalogLiveDataClient(LiveMarketDataClient):
                 self._done.set_result(True)
 
     async def _replay_once(self) -> None:
-        """Read current bar set from provider; emit any not-yet-emitted bars."""
+        """Read current bar set from provider; emit any not-yet-emitted bars.
+
+        Bars are emitted in **interleaved ts_event order** across tickers (not
+        ticker-by-ticker), and the coroutine yields with ``asyncio.sleep(0)``
+        after every bar so the live exec engine's async command queue can
+        drain (submitted orders need to land in the exec client's ``_pending``
+        bucket *before* the next bar arrives, otherwise no fills are ever
+        emitted in fast-replay).
+        """
         bars_by_ticker = self._bar_provider()
+        merged: list[Bar] = []
         for ticker, bars in bars_by_ticker.items():
             emitted = self._emitted_ts_per_ticker.setdefault(ticker, set())
-            new_bars = [b for b in bars if b.ts_event not in emitted]
-            replay_bars(new_bars, emit_fn=self._handle_data)
-            emitted.update(b.ts_event for b in new_bars)
+            for b in bars:
+                if b.ts_event not in emitted:
+                    merged.append(b)
+                    emitted.add(b.ts_event)
+        merged.sort(key=lambda b: b.ts_event)
+        for bar in merged:
+            self._handle_data(bar)
+            # Yield to the event loop so the exec engine can process the
+            # SubmitOrder command(s) the strategy just enqueued before the
+            # next bar fires the exec client's _on_bar (which is when those
+            # newly-pending orders should fill).
+            await asyncio.sleep(0)
 
     async def _poll_loop(self) -> None:
         """Continuous-mode polling. Re-reads from provider every poll_seconds."""

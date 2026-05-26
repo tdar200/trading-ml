@@ -60,6 +60,10 @@ class ExecClientParams:
 
     slippage_prob: float = 0.25
     random_seed: int = 42
+    # Initial USD cash balance for the sim's account. Matches
+    # ``strategies.backtest_setup.add_default_backtest_venue`` so the
+    # TradingNode-path equity is comparable to BacktestEngine-path equity.
+    starting_balance_usd: int = 100_000
 
 
 # Module-level registries keyed by client_id. The factories read from these
