@@ -25,7 +25,10 @@ def summarize_walk_forward(wf_df: pd.DataFrame, param_cols: list[str]) -> dict[s
     winner_tuple = medians.index[0]
     if not isinstance(winner_tuple, tuple):
         winner_tuple = (winner_tuple,)
-    winner = dict(zip(param_cols, winner_tuple, strict=True))
+    winner = {
+        k: (v.item() if hasattr(v, "item") else v)
+        for k, v in zip(param_cols, winner_tuple, strict=True)
+    }
 
     winner_rows = wf_df
     for col, val in winner.items():
