@@ -19,7 +19,7 @@ import pandas as pd
 from nautilus_trader.persistence.catalog.parquet import ParquetDataCatalog
 
 from data.bar_converter import alpaca_df_to_bars
-from data.instruments import build_universe_instruments
+from data.instruments import VENUE_MIC, build_universe_instruments
 from data.tickers import ALL_TICKERS
 
 DEFAULT_CATALOG_PATH = Path("data/catalog")
@@ -87,7 +87,16 @@ def ingest(
 
     all_bars = []
     for t in tickers:
-        all_bars.extend(alpaca_df_to_bars(df, t))
+        ticker_bars = alpaca_df_to_bars(df, t)
+        # Clip bars already stored for this ticker (exact int ts_event match):
+        # ParquetDataCatalog.write_data raises on partially-overlapping
+        # intervals, so drop already-present bars before writing.
+        try:
+            existing = catalog.bars(instrument_ids=[f"{t}.{VENUE_MIC}"])
+        except Exception:
+            existing = []
+        existing_ts = {b.ts_event for b in existing}
+        all_bars.extend(b for b in ticker_bars if b.ts_event not in existing_ts)
     if all_bars:
         catalog.write_data(all_bars)
 
