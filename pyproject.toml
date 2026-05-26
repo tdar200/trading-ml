@@ -1,0 +1,23 @@
+[project]
+name = "trading-ml"
+version = "0.1.0"
+description = "ML + trading research lab on NautilusTrader with Alpaca data"
+requires-python = ">=3.12,<3.15"
+dependencies = [
+    "nautilus_trader==1.227.0",
+    "alpaca-py==0.43.4",
+    "pandas>=2.2",
+    "polars>=1.0",
+    "python-dotenv>=1.0",
+    "yfinance>=0.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
