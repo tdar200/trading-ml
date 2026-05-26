@@ -3,12 +3,22 @@ SimulatedLiveExecutionClient — accepts orders and emits fills at the next bar.
 
 Subscribes (via the message bus) to bar events emitted by the data client.
 On each bar for an instrument we have a pending order for, this client
-generates a fill at the bar's open price + optional one-tick slippage gated
-by a probability (seeded for determinism).
+buffers the fill (order, price, bar) rather than emitting it immediately.
+The data client calls ``flush_buffered_fills()`` at the end of each
+timestamp group (trading day), which emits the buffered fills in
+SELL-before-BUY order. This mirrors BacktestEngine behaviour where fills
+within the same rebalance always clear the SELL side first so that freed
+cash is available before the BUY side debits the account.
 
-The fill-price decision is extracted into the pure ``compute_fill_price``
-helper for unit testability. The full async order-fill cycle is exercised
-in Task 8's TradingNode integration test.
+Background (why buffering is needed): in the livesim's async architecture,
+the exec client's ``_on_bar`` handler fires synchronously on every bar in
+the order bars arrive (sorted by ticker index in ALL_TICKERS). When a
+rebalance fires on ticker A's bar and submits a SELL for ticker B (later
+in the sequence) and a BUY for ticker C (earlier in the sequence), C's
+bar arrives before B's bar, so the BUY fills before the SELL. On a CASH
+account the BUY debit can overdraw the account before the SELL credit
+arrives, raising ``AccountBalanceNegative``. Buffering fills and flushing
+in SELL-then-BUY order eliminates this race.
 
 Per §12.5 of ``docs/nautilus_api_notes.md``:
 
@@ -86,6 +96,9 @@ def compute_fill_price(
 # Default tick size for the Stage-4 ETF universe (2dp, $0.01 increment).
 _DEFAULT_TICK_SIZE: Decimal = Decimal("0.01")
 
+# Type alias for a buffered fill: (order, venue_order_id, fill_price, bar).
+_FillEntry = tuple  # (order, VenueOrderId, Decimal, Bar)
+
 
 class SimulatedLiveExecutionClient(LiveExecutionClient):
     """Simulated live exec client — fills pending orders at the next bar's open.
@@ -110,8 +123,16 @@ class SimulatedLiveExecutionClient(LiveExecutionClient):
         self._slippage_prob = slippage_prob
         self._rng = random.Random(random_seed)
         self._starting_balance_usd = starting_balance_usd
-        # ticker (string prefix of the InstrumentId, e.g. "SPY") → pending orders
+        # ticker → list of (order, venue_order_id, submitted_at_ts_event) tuples.
+        # submitted_at_ts_event is the ts_event of the bar current when the order
+        # was submitted; orders are only eligible to fill on bars AFTER that ts.
         self._pending: dict[str, list] = {}
+        # ts_event of the most recently processed bar (updated in _on_bar).
+        self._current_bar_ts_event: int = 0
+        # Buffered fills waiting for flush_buffered_fills() — split by side so
+        # SELLs are always emitted before BUYs within a day (mirrors BacktestEngine).
+        self._buffered_fills_sell: list[_FillEntry] = []
+        self._buffered_fills_buy: list[_FillEntry] = []
         # Monotonic counter for generating unique VenueOrderId / TradeId values.
         self._venue_order_seq: int = 0
         self._trade_seq: int = 0
@@ -190,9 +211,12 @@ class SimulatedLiveExecutionClient(LiveExecutionClient):
         )
 
         ticker = str(order.instrument_id).split(".")[0]
-        # Store the order with its assigned venue_order_id so the fill can
-        # reference it back.
-        self._pending.setdefault(ticker, []).append((order, venue_order_id))
+        # Record the ts_event of the bar being processed when this command
+        # arrived; _on_bar uses this to skip fills for same-ts bars (fill
+        # happens on the NEXT bar for this ticker, matching BacktestEngine).
+        self._pending.setdefault(ticker, []).append(
+            (order, venue_order_id, self._current_bar_ts_event)
+        )
 
     async def _cancel_order(self, command) -> None:
         # No-op for the sim: fills happen on the very next bar so a real
@@ -227,21 +251,42 @@ class SimulatedLiveExecutionClient(LiveExecutionClient):
     # ------------------------------------------------------------------
 
     def _on_bar(self, bar: Bar) -> None:
-        """Fill any pending orders for this bar's instrument at the bar's open.
+        """Buffer fills for pending orders for this bar's instrument.
 
         Wired in ``_connect`` to the ``data.bars.*`` msgbus topic; the data
         client emits via ``self._handle_data`` which the data engine then
         publishes to this topic.
+
+        Fills are NOT emitted immediately — they are buffered into
+        ``_buffered_fills_sell`` / ``_buffered_fills_buy`` and flushed by
+        ``flush_buffered_fills()`` at end-of-day (called by the data client
+        after each timestamp group). This ensures SELLs are always settled
+        before BUYs, preventing ``AccountBalanceNegative`` on rotation days
+        where the SELL ticker appears later in the bar sequence than the
+        BUY ticker.
+
+        Orders submitted while THIS bar was being processed carry
+        ``submitted_at_ts_event == bar.ts_event`` and are deferred to the
+        next bar (same-day fill guard).
         """
         if not isinstance(bar, Bar):
             return
+        # Update current ts so _submit_order can stamp orders submitted
+        # during this bar's processing (they'll be deferred to the next bar).
+        self._current_bar_ts_event = bar.ts_event
         self._bars_received += 1
         ticker = str(bar.bar_type).split(".")[0]
         if ticker not in self._pending:
             return
-        pending_orders = self._pending.pop(ticker)
-        for order, venue_order_id in pending_orders:
-            self._fills_emitted += 1
+        # Partition: buffer fills for orders submitted on an EARLIER bar,
+        # defer same-ts orders.
+        deferred: list = []
+        for entry in self._pending[ticker]:
+            order, venue_order_id, submitted_at_ts = entry
+            if submitted_at_ts == bar.ts_event:
+                deferred.append(entry)
+                continue
+            # Order is eligible to fill on this bar.
             slip_ticks = 1 if self._rng.random() < self._slippage_prob else 0
             fill_price = compute_fill_price(
                 bar=bar,
@@ -249,12 +294,35 @@ class SimulatedLiveExecutionClient(LiveExecutionClient):
                 slippage_ticks=slip_ticks,
                 tick_size=_DEFAULT_TICK_SIZE,
             )
-            self._emit_fill(
-                order=order,
-                venue_order_id=venue_order_id,
-                fill_price=fill_price,
-                bar=bar,
-            )
+            if order.side == OrderSide.SELL:
+                self._buffered_fills_sell.append((order, venue_order_id, fill_price, bar))
+            else:
+                self._buffered_fills_buy.append((order, venue_order_id, fill_price, bar))
+        if deferred:
+            self._pending[ticker] = deferred
+        else:
+            del self._pending[ticker]
+
+    def flush_buffered_fills(self) -> None:
+        """Emit all buffered fills: SELLs first, then BUYs.
+
+        Called by ``CatalogLiveDataClient._replay_once`` at the end of each
+        timestamp group (trading day) after draining the exec-engine command
+        queue. The SELL-first ordering ensures freed cash is credited before
+        BUY debits, mirroring BacktestEngine fill sequencing.
+        """
+        sells = self._buffered_fills_sell
+        buys = self._buffered_fills_buy
+        self._buffered_fills_sell = []
+        self._buffered_fills_buy = []
+        for order, venue_order_id, fill_price, bar in sells:
+            self._fills_emitted += 1
+            self._emit_fill(order=order, venue_order_id=venue_order_id,
+                            fill_price=fill_price, bar=bar)
+        for order, venue_order_id, fill_price, bar in buys:
+            self._fills_emitted += 1
+            self._emit_fill(order=order, venue_order_id=venue_order_id,
+                            fill_price=fill_price, bar=bar)
 
     def _emit_fill(
         self,

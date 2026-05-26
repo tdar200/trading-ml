@@ -39,6 +39,22 @@ BarProvider = Callable[[], dict[str, list[Bar]]]
 # connection step in the kernel lifecycle).
 _INITIAL_EMIT_DELAY_SECONDS: float = 0.5
 
+# Number of asyncio.sleep(0) calls used to drain the exec engine's command
+# queue after a timestamp group's bars are emitted. Each sleep gives the
+# event loop one scheduling cycle; the command queue drains one SubmitOrder
+# per cycle. A top_n=3 rebalance generates up to 6 SubmitOrder commands
+# (3 SELLs + 3 BUYs on a full rotation). Each command also generates
+# submitted+accepted events on the evt queue, so we need enough yields for
+# both. 50 drains is conservative overkill to ensure all commands drain.
+_CMD_DRAIN_YIELDS: int = 50
+
+# Number of asyncio.sleep(0) calls used to drain the exec engine's event
+# queue after ``flush_buffered_fills()`` emits fill events. Each fill
+# generates an OrderFilled event + a PositionOpened/Changed/Closed event
+# = 2 events per fill; top_n=3 with rotation has ~6 fills = 12 events.
+# 50 drains is conservative overkill.
+_EVT_DRAIN_YIELDS: int = 50
+
 
 def replay_bars(bars: list[Bar], emit_fn: Callable[[Bar], None]) -> None:
     """Pure helper: emit each bar in ascending ``ts_event`` order.
@@ -79,6 +95,12 @@ class CatalogLiveDataClient(LiveMarketDataClient):
         self._emitted_ts_per_ticker: dict[str, set[int]] = {}
         self._done: asyncio.Future = asyncio.Future()
         self._poll_task: asyncio.Task | None = None
+        # Optional reference to the paired exec client — set lazily at first
+        # use by _replay_once by looking up factories._LAST_EXEC_CLIENT.
+        # When present, flush_buffered_fills() is called after each timestamp
+        # group so that SELL fills are emitted before BUY fills, preventing
+        # AccountBalanceNegative on cross-ticker rotation days.
+        self._exec_client = None  # type: ignore[assignment]
 
     def done(self) -> asyncio.Future:
         """Resolves to ``True`` when fast-replay completes (or ``False`` on
@@ -134,15 +156,60 @@ class CatalogLiveDataClient(LiveMarketDataClient):
             if not self._done.done():
                 self._done.set_result(True)
 
+    def _get_exec_client(self):
+        """Lazy-fetch the paired exec client from the factories module.
+
+        Uses a late import to avoid a circular dependency (factories imports
+        data_client; data_client must not import factories at module level).
+        Returns None if not found (e.g., in unit tests that don't use the
+        factory).
+        """
+        if self._exec_client is not None:
+            return self._exec_client
+        try:
+            from livesim.factories import get_last_exec_client  # late import
+            venue_name = self.id.value  # client_id == venue MIC (e.g. "ARCX")
+            self._exec_client = get_last_exec_client(venue_name)
+        except (ImportError, KeyError):
+            self._exec_client = None  # type: ignore[assignment]
+        return self._exec_client
+
+    async def _flush_day(self) -> None:
+        """Drain cmd queue, flush fills (SELLs first), then drain evt queue.
+
+        Called between timestamp groups in ``_replay_once`` to ensure:
+        1. All SubmitOrder commands are processed (orders land in _pending).
+        2. Buffered fills are emitted in SELL-before-BUY order.
+        3. All resulting fill events are processed (balances + positions updated).
+
+        Without this, cross-ticker rotation days overdraw the account:
+        BUY ticker-A (low index) fills before SELL ticker-B (high index) on
+        the same day, debiting cash before the corresponding credit arrives.
+        """
+        # Step 1: drain exec engine command queue so all orders are in _pending.
+        for _ in range(_CMD_DRAIN_YIELDS):
+            await asyncio.sleep(0)
+
+        # Step 2: flush buffered fills (SELL before BUY).
+        exec_client = self._get_exec_client()
+        if exec_client is not None:
+            exec_client.flush_buffered_fills()
+
+        # Step 3: drain exec engine event queue so fills and position events
+        # are processed before the next day's bars arrive.
+        for _ in range(_EVT_DRAIN_YIELDS):
+            await asyncio.sleep(0)
+
     async def _replay_once(self) -> None:
         """Read current bar set from provider; emit any not-yet-emitted bars.
 
         Bars are emitted in **interleaved ts_event order** across tickers (not
-        ticker-by-ticker), and the coroutine yields with ``asyncio.sleep(0)``
-        after every bar so the live exec engine's async command queue can
-        drain (submitted orders need to land in the exec client's ``_pending``
-        bucket *before* the next bar arrives, otherwise no fills are ever
-        emitted in fast-replay).
+        ticker-by-ticker). After each *timestamp group* (all bars sharing the
+        same ts_event — one trading day), ``_flush_day()`` drains the command
+        queue, emits buffered fills in SELL-before-BUY order, then drains the
+        event queue. This prevents ``AccountBalanceNegative`` on rotation days
+        where the SELL ticker appears later in the daily bar sequence than the
+        BUY ticker.
         """
         bars_by_ticker = self._bar_provider()
         merged: list[Bar] = []
@@ -153,13 +220,20 @@ class CatalogLiveDataClient(LiveMarketDataClient):
                     merged.append(b)
                     emitted.add(b.ts_event)
         merged.sort(key=lambda b: b.ts_event)
+        prev_ts: int | None = None
         for bar in merged:
+            # At timestamp group boundary: flush the previous day's fills
+            # before emitting the new day's first bar.
+            if prev_ts is not None and bar.ts_event != prev_ts:
+                await self._flush_day()
             self._handle_data(bar)
-            # Yield to the event loop so the exec engine can process the
-            # SubmitOrder command(s) the strategy just enqueued before the
-            # next bar fires the exec client's _on_bar (which is when those
-            # newly-pending orders should fill).
+            # Yield once per bar so the exec engine can process the SubmitOrder
+            # commands the strategy just enqueued (needed before the next bar
+            # fires _on_bar, which checks _pending for fills).
             await asyncio.sleep(0)
+            prev_ts = bar.ts_event
+        # Final flush for the last day's fills.
+        await self._flush_day()
 
     async def _poll_loop(self) -> None:
         """Continuous-mode polling. Re-reads from provider every poll_seconds."""
