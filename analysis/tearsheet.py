@@ -8,34 +8,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import quantstats as qs
 
-
-def _cagr(returns: pd.Series, periods_per_year: int = 252) -> float:
-    if len(returns) == 0:
-        return float("nan")
-    total = (1.0 + returns).prod()
-    years = len(returns) / periods_per_year
-    if years <= 0 or total <= 0:
-        return float("nan")
-    return float(total ** (1.0 / years) - 1.0)
-
-
-def _sharpe(returns: pd.Series, periods_per_year: int = 252, rf: float = 0.0) -> float:
-    if returns.std(ddof=0) == 0 or len(returns) == 0:
-        return float("nan")
-    excess = returns - rf / periods_per_year
-    return float(excess.mean() / excess.std(ddof=0) * np.sqrt(periods_per_year))
-
-
-def _max_drawdown(equity: pd.Series) -> float:
-    if len(equity) == 0:
-        return float("nan")
-    running_max = equity.cummax()
-    drawdown = (equity - running_max) / running_max
-    return float(drawdown.min())
+from analysis.metrics import cagr, max_drawdown, sharpe
 
 
 def report(
@@ -70,12 +46,12 @@ def report(
         spy_window = spy
 
     summary = {
-        "strategy_cagr": _cagr(strat_ret),
-        "strategy_sharpe": _sharpe(strat_ret),
-        "strategy_max_dd": _max_drawdown(equity_window),
-        "spy_cagr": _cagr(spy_ret),
-        "spy_sharpe": _sharpe(spy_ret),
-        "spy_max_dd": _max_drawdown(spy_window),
+        "strategy_cagr": cagr(strat_ret),
+        "strategy_sharpe": sharpe(strat_ret),
+        "strategy_max_dd": max_drawdown(equity_window),
+        "spy_cagr": cagr(spy_ret),
+        "spy_sharpe": sharpe(spy_ret),
+        "spy_max_dd": max_drawdown(spy_window),
         "n_days": len(common),
     }
 
