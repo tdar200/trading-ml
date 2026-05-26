@@ -723,7 +723,7 @@ engine.dispose()
 
 ---
 
-## 10. Enums (verified members)
+## 11. Enums (verified members)
 
 ```python
 from nautilus_trader.model.enums import AccountType, OmsType, AggregationSource
@@ -741,7 +741,7 @@ from nautilus_trader.model.enums import OrderSide, TimeInForce, PositionSide
 # PositionSide:  NO_POSITION_SIDE (filter sentinel), FLAT, LONG, SHORT
 ```
 
-## 11. Summary for downstream tasks
+## 12. Summary for downstream tasks
 
 Stage 1:
 - **Task 3 (smoke backtest):** use the §8 skeleton; balance read via
