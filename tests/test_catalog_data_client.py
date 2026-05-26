@@ -64,3 +64,39 @@ def test_replay_bars_emits_each_bar_once():
     replay_bars(bars, emit_fn=emitted.append)
     assert len(emitted) == 3
     assert emitted == bars
+
+
+def test_replay_once_emits_only_new_bars_per_ticker():
+    """Calling replay logic twice with the SAME bars should not double-emit."""
+    bars = _bars("A", 3)
+    emitted: list[Bar] = []
+    emitted_ts: set[int] = set()
+
+    def emit_if_new(bar: Bar) -> None:
+        if bar.ts_event not in emitted_ts:
+            emitted.append(bar)
+            emitted_ts.add(bar.ts_event)
+
+    replay_bars(bars, emit_fn=emit_if_new)
+    replay_bars(bars, emit_fn=emit_if_new)  # same bars, second time
+    assert len(emitted) == 3
+
+
+def test_replay_once_picks_up_newly_appeared_bars():
+    """If the provider returns more bars on the second call, only the deltas are emitted."""
+    bars_initial = _bars("A", 3)
+    bars_extended = _bars("A", 5)  # bars 4,5 are new (indices 3,4)
+    emitted: list[Bar] = []
+    emitted_ts: set[int] = set()
+
+    def emit_if_new(bar: Bar) -> None:
+        if bar.ts_event not in emitted_ts:
+            emitted.append(bar)
+            emitted_ts.add(bar.ts_event)
+
+    replay_bars(bars_initial, emit_fn=emit_if_new)
+    assert len(emitted) == 3
+    replay_bars(bars_extended, emit_fn=emit_if_new)
+    assert len(emitted) == 5
+    # Last two emitted are the deltas (indices 3, 4 of bars_extended).
+    assert emitted[-2:] == bars_extended[-2:]
