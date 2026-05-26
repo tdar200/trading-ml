@@ -1,0 +1,139 @@
+"""
+Integration tests for MomentumTopNStrategy via a synthetic BacktestEngine.
+
+These tests build a tiny engine with fake instruments and hand-crafted bars
+so the strategy logic can be exercised end-to-end without depending on the
+real Stage-1 catalog or real Alpaca data.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import pytest
+
+from nautilus_trader.backtest.engine import BacktestEngine, BacktestEngineConfig
+from nautilus_trader.backtest.models import FillModel
+from nautilus_trader.config import LoggingConfig
+from nautilus_trader.model.currencies import USD
+from nautilus_trader.model.data import Bar, BarType
+from nautilus_trader.model.enums import AccountType, OmsType
+from nautilus_trader.model.identifiers import InstrumentId, Symbol, TraderId, Venue
+from nautilus_trader.model.instruments import Equity
+from nautilus_trader.model.objects import Money, Price, Quantity
+
+from data.instruments import VENUE_MIC
+from strategies.momentum_topn import MomentumTopNConfig, MomentumTopNStrategy
+
+
+# ---- synthetic data helpers ----
+
+def _instrument(ticker: str) -> Equity:
+    return Equity(
+        instrument_id=InstrumentId.from_str(f"{ticker}.{VENUE_MIC}"),
+        raw_symbol=Symbol(ticker),
+        currency=USD,
+        price_precision=2,
+        price_increment=Price.from_str("0.01"),
+        lot_size=Quantity.from_int(1),
+        ts_event=0,
+        ts_init=0,
+    )
+
+
+def _bars(ticker: str, closes: list[float], start_ts_ns: int) -> list[Bar]:
+    """Build daily bars: one bar per day, OHLC = close, volume = 1_000_000."""
+    bar_type = BarType.from_str(f"{ticker}.{VENUE_MIC}-1-DAY-LAST-EXTERNAL")
+    one_day_ns = 86_400_000_000_000
+    bars: list[Bar] = []
+    for i, c in enumerate(closes):
+        ts = start_ts_ns + i * one_day_ns
+        p = Price.from_str(f"{c:.2f}")
+        bars.append(Bar(
+            bar_type=bar_type, open=p, high=p, low=p, close=p,
+            volume=Quantity.from_int(1_000_000),
+            ts_event=ts, ts_init=ts,
+        ))
+    return bars
+
+
+@dataclass
+class SyntheticBacktest:
+    engine: BacktestEngine
+    strategy: MomentumTopNStrategy
+    venue: Venue
+
+
+def _run_synthetic_backtest(
+    closes_by_ticker: dict[str, list[float]],
+    benchmark_closes: list[float],
+    *,
+    top_n: int = 3,
+    lookback_days: int = 126,
+    skip_days: int = 21,
+    starting_cash: int = 100_000,
+    start_ts_ns: int = 1_700_000_000_000_000_000,
+) -> SyntheticBacktest:
+    """Build + run a BacktestEngine with the given synthetic data; return engine + strategy."""
+    universe = tuple(closes_by_ticker.keys())
+    config = BacktestEngineConfig(
+        trader_id=TraderId("TEST-001"),
+        logging=LoggingConfig(log_level="WARNING"),
+    )
+    engine = BacktestEngine(config=config)
+    venue = Venue(VENUE_MIC)
+    engine.add_venue(
+        venue=venue,
+        oms_type=OmsType.NETTING,
+        account_type=AccountType.CASH,
+        base_currency=USD,
+        starting_balances=[Money(starting_cash, USD)],
+        fill_model=FillModel(prob_fill_on_limit=1.0, prob_slippage=0.0, random_seed=42),
+    )
+    # Instruments + bars for tradeable universe + benchmark
+    for t in universe:
+        engine.add_instrument(_instrument(t))
+        engine.add_data(_bars(t, closes_by_ticker[t], start_ts_ns))
+    engine.add_instrument(_instrument("BENCH"))
+    engine.add_data(_bars("BENCH", benchmark_closes, start_ts_ns))
+
+    strat = MomentumTopNStrategy(config=MomentumTopNConfig(
+        universe=universe,
+        benchmark="BENCH",
+        top_n=top_n,
+        lookback_days=lookback_days,
+        skip_days=skip_days,
+    ))
+    engine.add_strategy(strat)
+    engine.run()
+    return SyntheticBacktest(engine=engine, strategy=strat, venue=venue)
+
+
+# ---- buffer tests (Task 5) ----
+
+def test_ring_buffer_appends_closes_per_ticker():
+    closes = {"A": [100.0 + i for i in range(30)],
+              "B": [50.0 + i for i in range(30)]}
+    bt = _run_synthetic_backtest(
+        closes_by_ticker=closes,
+        benchmark_closes=[200.0] * 30,
+        top_n=1, lookback_days=5, skip_days=1,
+    )
+    assert "A" in bt.strategy._closes
+    assert "B" in bt.strategy._closes
+    assert "BENCH" in bt.strategy._closes
+    assert bt.strategy._closes["A"][-1] == pytest.approx(100.0 + 29)
+    assert bt.strategy._closes["B"][-1] == pytest.approx(50.0 + 29)
+
+
+def test_ring_buffer_is_size_bounded():
+    # With lookback=5, skip=1, the buffer cap should be ~11 entries; well below 30.
+    closes = {"A": [100.0 + i for i in range(30)]}
+    bt = _run_synthetic_backtest(
+        closes_by_ticker=closes,
+        benchmark_closes=[200.0] * 30,
+        top_n=1, lookback_days=5, skip_days=1,
+    )
+    # The buffer must keep at least the (lookback + skip + 1) most recent closes;
+    # it must NOT grow unbounded across many bars.
+    assert len(bt.strategy._closes["A"]) <= 5 + 1 + 5  # generous upper bound (=11)
+    assert bt.strategy._closes["A"][-1] == pytest.approx(129.0)

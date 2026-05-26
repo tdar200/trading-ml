@@ -47,8 +47,13 @@ class MomentumTopNStrategy(Strategy):
             self.subscribe_bars(bar_type)
 
     def on_bar(self, bar: Bar) -> None:
-        # Behavior layered in Tasks 5–7. For now: do nothing.
-        return
+        ticker = self._ticker_for(bar)
+        history = self._closes.setdefault(ticker, [])
+        history.append(float(bar.close))
+        # Keep just enough history for the ranker plus a small slack.
+        cap = self.config.lookback_days + self.config.skip_days + 5
+        if len(history) > cap:
+            del history[0 : len(history) - cap]
 
     # ---- helpers ----
 
