@@ -78,7 +78,7 @@ Single Python project. NautilusTrader owns everything that moves orders or time 
 
 - **Tickers:** XLK, XLF, XLE, XLV, XLI, XLY, XLP, XLU, XLB, XLRE, XLC (11 SPDR sector ETFs) + SPY (benchmark).
 - **Resolution:** daily bars only at this stage. No intraday, no tick.
-- **History:** 2016-01-01 → today (Alpaca's documented start).
+- **History:** Free-tier `DataFeed.IEX` provides ~5.5 years of history in practice (~2020-07 onward); the catalog effectively starts ~2020-07. The `2016-01-01` start date is left in the ingest CLI as an aspirational lower bound — Alpaca's free tier simply returns what it has, so there is no harm in asking for more. Full history to 2016+ requires Alpaca's paid Algo Trader Plus subscription (`DataFeed.SIP`), which is out of scope for the $0 paper-only commitment.
 - **Adjustment:** `adjustment="all"` (splits + dividends) on the Alpaca side; bars persisted into Nautilus catalog with a pinned, documented adjustment convention.
 
 Survivorship bias is sidestepped because all 12 tickers exist for the full window; this is a deliberate choice to keep the early stages clean and is revisited if/when the universe expands beyond ETFs.
@@ -151,6 +151,7 @@ trading-ml/
 3. **Alpaca free-tier 15-min SIP withhold** — irrelevant for daily-bar backtests; will matter near market hours in Stage 4 sim-live. Stage 4 design should snapshot data *after* market close to sidestep it.
 4. **Nautilus breaking changes between releases** — README warns of this. Pin the version, write integration tests, upgrade deliberately.
 5. **The realistic outcome of Stage 2** is "doesn't beat SPY net of costs." That is the expected baseline and validates the honesty harness — not a project failure.
+6. **Free-tier IEX vs SIP venue spread** — Alpaca's free tier serves bars from IEX (a single exchange); yfinance returns SIP-consolidated closes. This creates legitimate venue noise of ~1% worst-case on isolated days (e.g. SPDR ex-dividend days); median drift is ~0.011%; p99 is ~0.061%; only ~0.27% of days exceed 0.1%. The yfinance cross-check tolerance is calibrated to 1.5% to catch adjustment bugs while accepting this venue noise. Migrating to a paid SIP feed (Alpaca Algo Trader Plus, or Tiingo) would eliminate this spread and extend history to 2016+; it is a Stage-3+ upgrade lever.
 
 ## 8. Out of scope (durably, not just for now)
 

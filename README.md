@@ -7,12 +7,12 @@ for the full design, philosophy, and staged roadmap.
 ## Status
 
 - [x] Stage 0 — Project skeleton + Nautilus smoke backtest
-- [~] Stage 1 — Alpaca → Nautilus ParquetDataCatalog ingestion pipeline
+- [x] Stage 1 — Alpaca → Nautilus ParquetDataCatalog ingestion pipeline
   - [x] Data pipeline built and unit-tested (universe, instruments, bar converter,
         Alpaca client, idempotent + overlap-safe ingest orchestrator)
-  - [ ] **Live ingest pending** — requires Alpaca API credentials (see Setup).
-        Run `data/ingest_alpaca.py` then `scripts/cross_check_yfinance.py` to
-        populate and validate the catalog.
+  - [x] Live catalog populated (12 tickers, ~2020-07 → today on free-tier IEX).
+        Cross-check passes at 1.5% tolerance (free-tier IEX vs yfinance SIP venue
+        noise — see design spec §7).
 - [ ] Stage 2 — First strategy (momentum top-N)
 - [ ] Stages 3–8 — see design spec
 
@@ -29,7 +29,9 @@ cp .env.example .env
 # 3. Smoke-test the engine (no data/credentials needed)
 uv run python examples/smoke.py
 
-# 4. Populate the data catalog (needs credentials; 1–5 min first run, seconds on re-runs)
+# 4. Populate the data catalog (needs credentials; 1–5 min first run, seconds on re-runs).
+#    Free-tier Alpaca uses DataFeed.IEX (~5.5 years of history, ~2020+ in practice).
+#    SIP feed (2016+) requires a paid Alpaca Algo Trader Plus subscription.
 uv run python data/ingest_alpaca.py
 
 # 5. Validate the catalog against an independent source

@@ -1,11 +1,21 @@
 """
 Validate Alpaca-ingested daily closes against yfinance for one ticker.
 
-Asserts max relative drift on adjusted close < 0.5% over the overlap window.
+Asserts max relative drift on adjusted close < tolerance over the overlap window.
 Run after a successful ingest. Exits non-zero on failure for easy CI wiring.
+
+Default tolerance is 1.5% (calibrated for free-tier DataFeed.IEX vs yfinance SIP):
+  - Alpaca free tier uses IEX (single-exchange feed); yfinance uses the SIP-consolidated
+    tape. Legitimate venue spread is ~1% worst-case on isolated days (e.g. SPDR
+    ex-dividend days). Median drift is ~0.01%; p99 is ~0.06%; only ~0.3% of days
+    exceed 0.1%. The 1.5% tolerance accepts this venue noise while still catching
+    adjustment bugs (which would be many percent off, every day).
+  - Pass --tolerance to override from the CLI (e.g. tighten to 0.005 when on a
+    paid SIP feed where both sides reflect the consolidated tape).
 
 Usage:
     uv run python scripts/cross_check_yfinance.py --ticker SPY --start 2024-01-01 --end 2024-06-30
+    uv run python scripts/cross_check_yfinance.py --ticker SPY --start 2024-01-01 --tolerance 0.005
 """
 from __future__ import annotations
 
@@ -54,7 +64,7 @@ def yfinance_closes(ticker: str, start: str, end: str) -> pd.Series:
     return s
 
 
-def cross_check(catalog_path: Path, ticker: str, start: str, end: str, tolerance: float = 0.005) -> int:
+def cross_check(catalog_path: Path, ticker: str, start: str, end: str, tolerance: float = 0.015) -> int:
     a = alpaca_closes_from_catalog(catalog_path, ticker)
     y = yfinance_closes(ticker, start, end)
     if a.empty or y.empty:
@@ -89,8 +99,18 @@ def main() -> int:
     parser.add_argument("--start", default="2024-01-01", help="Start date YYYY-MM-DD (default: 2024-01-01)")
     parser.add_argument("--end", default=datetime.now(timezone.utc).strftime("%Y-%m-%d"), help="End date YYYY-MM-DD (default: today)")
     parser.add_argument("--catalog", default="data/catalog", help="Path to Parquet data catalog (default: data/catalog)")
+    parser.add_argument(
+        "--tolerance",
+        type=float,
+        default=0.015,
+        help=(
+            "Max allowed relative drift between Alpaca close and yfinance close "
+            "(default: 0.015 = 1.5%%, calibrated for free-tier IEX vs SIP venue spread). "
+            "Tighten to e.g. 0.005 when on a paid SIP feed."
+        ),
+    )
     args = parser.parse_args()
-    return cross_check(Path(args.catalog), args.ticker, args.start, args.end)
+    return cross_check(Path(args.catalog), args.ticker, args.start, args.end, tolerance=args.tolerance)
 
 
 if __name__ == "__main__":
