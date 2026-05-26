@@ -110,9 +110,13 @@ benchmark: str                # default "SPY" (subscribed but not traded)
 top_n: int = 3
 lookback_days: int = 126
 skip_days: int = 21
-venue: str = "ARCX"           # imports VENUE_MIC at plan time
-starting_cash: int = 100_000  # used by backtest entry, not the strategy itself
 ```
+
+Venue and starting cash are intentionally NOT config fields: the venue MIC is
+sourced from `data.instruments.VENUE_MIC` (single source of truth), and
+`starting_cash` is a property of the backtest harness (`add_default_backtest_venue`
+in `strategies/backtest_setup.py`), not the strategy. Keeping them off the
+strategy config avoids a redundant second place to set the venue.
 
 ## 4. Backtest entry point
 
