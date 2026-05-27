@@ -100,9 +100,9 @@ async def _run(fast_replay: bool, poll_seconds: float | None, slippage_prob: flo
         strategy_config_kwargs={
             "universe": UNIVERSE,
             "benchmark": BENCHMARK,
-            "top_n": 3,
+            "top_n": 2,
             "lookback_days": 63,
-            "skip_days": 0,  # Stage-3 winner
+            "skip_days": 0,  # Stage-3 winner (re-baselined to top_n=2 post Stage-4.5 followup)
         },
     )
 

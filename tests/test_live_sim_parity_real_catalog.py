@@ -73,11 +73,12 @@ _WINDOW_END = datetime(2023, 1, 1, tzinfo=timezone.utc)
 
 _CATALOG_PATH = Path(__file__).parent.parent / "data" / "catalog"
 
-# Same Stage-3 winner combo as examples/run_trading_node.py uses.
+# Same Stage-3 winner combo as examples/run_trading_node.py uses
+# (re-baselined to top_n=2 post Stage-4.5 followup).
 _STRATEGY_KWARGS = {
     "universe": UNIVERSE,
     "benchmark": BENCHMARK,
-    "top_n": 3,
+    "top_n": 2,
     "lookback_days": 63,
     "skip_days": 0,
 }

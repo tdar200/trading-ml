@@ -91,7 +91,7 @@ def main() -> int:
     # 1. Baseline: Stage-2 winner config, one run per window.
     print("running baseline...")
     base_kwargs = dict(universe=UNIVERSE, benchmark=BENCHMARK,
-                       top_n=3, lookback_days=63, skip_days=0)
+                       top_n=2, lookback_days=63, skip_days=0)
     base_rows = []
     for window_idx, (start, end) in enumerate(windows):
         spec = RunSpec(
@@ -123,7 +123,7 @@ def main() -> int:
     }
     meta_base = dict(
         universe=UNIVERSE, benchmark=BENCHMARK,
-        top_n=3, lookback_days=63, skip_days=0,
+        top_n=2, lookback_days=63, skip_days=0,
         model_store_path=str(CACHE_DIR),
     )
     meta_df = walk_forward(
@@ -187,7 +187,7 @@ def main() -> int:
 
     md = f"""# Stage-5 Meta-Labeling Harness — {timestamp}
 
-## Baseline (Stage-2 winner: top_n=3, lookback=63, skip=0)
+## Baseline (Stage-3 winner: top_n=2, lookback=63, skip=0)
 - median window Sharpe: **{baseline_median:.4f}**
 - median window CAGR:   {float(base_df['cagr'].median()):.4f}
 
