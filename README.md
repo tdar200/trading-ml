@@ -53,6 +53,14 @@ for the full design, philosophy, and staged roadmap.
   - [x] `examples/preflight_alpaca.py` — stand-alone smoke confirms connectivity (account id, equity, buying power, positions, recent orders). **Verified against the user's real paper account: equity $100k, status ACTIVE.**
   - [x] `docs/superpowers/specs/2026-05-27-stage-8-deploy-checklist.md` — the human-action checklist for the 3-month paper observation that must precede real-money rollout. Real-money rollout is a 1-line config change (`paper=False`) gated entirely by this checklist, not by code complexity. **Defense-in-depth (Stage-8.5):** `AlpacaLiveExecutionClient.__init__` now raises `RuntimeError` if `paper=False` is passed, requiring a deliberate commit that references the checklist sign-off — so flipping to real money is no longer a single-config-knob change.
   - [ ] **3-month paper observation** (the parent spec gate). I cannot complete this in-session — it requires daily runs over ≥3 months with the metrics in checklist §C-E. Real-money rollout follows §F-G only if all gates pass.
+- [x] Stage 9 — Multi-timeframe TradingView-style dashboard + self-service Backtest Lab
+  - [x] `data/ingest_alpaca_intraday.py` — 1m / 5m / 15m / 30m / 1h / 4h bar ingest from Alpaca's free-tier IEX feed (sibling of Stage 1's daily catalog). Idempotent per-(ticker, timeframe, month) parquet shards under `data/intraday/<ticker>/<tf>/<YYYY-MM>.parquet`.
+  - [x] `data/multitf.py` — single `get_bars(ticker, timeframe, start, end)` entry. Three branches: intraday parquet / Stage-1 daily catalog / pandas OHLC resample for 1w / 1M / 1Y. Uniform output schema [ts, open, high, low, close, volume] across all timeframes.
+  - [x] `dashboard/views/equity.py` — rewritten to use `streamlit-lightweight-charts` (Streamlit-native wrapper around TradingView's open-source Lightweight Charts, Apache 2.0). Ticker selector + TradingView-style timeframe segmented control (1m / 5m / 15m / 30m / 1h / 4h / 1d / 1w / 1M / 1Y) + candlestick + volume subchart with up/down color coding. Per-timeframe sensible-default lookback (1m: 5 days → 1Y: 20 years). Falls back to legacy Stage-7 equity overlay when intraday cache empty.
+  - [x] `dashboard/views/backtest_lab.py` — self-service strategy tester. Auto-discovers `(Strategy, StrategyConfig)` pairs via `pkgutil` walk over `strategies/` (new strategy = new dropdown entry, no manual registry). Auto-renders parameter form via msgspec `__struct_fields__` introspection (subclass-only fields; the 16+ inherited base fields stay hidden). Three modes: **Single** (one backtest via `analysis.runner.run`), **Grid** (sweep one numeric param ≤200 cells via `analysis.walk_forward.walk_forward` + sortable table + bar chart), **Optuna** (n_trials hyperparameter optimization writing to `results/optuna.db` + shows the launch command for the rich `optuna-dashboard` visualization).
+  - [x] `dashboard/views/strategy_runner.py` — form-driven launcher for `examples/run_trading_node.py` (exec mode / fast-replay / poll-seconds / slippage); streams subprocess stdout via `st.write_stream`. For quick smoke checks only — the actual 3-month paper observation is terminal-based.
+  - [x] `dashboard/app.py` — 7 tabs wired (Equity, Backtest Lab, Strategy Runner, Harness Verdicts, Sentiment, Models, Journal). All on the free-tier Alpaca IEX feed. 170 tests pass.
+  - **Costs**: $0/mo as designed. Optional Tiingo Power ($30/mo) gives 30+ years of daily/weekly history if you outgrow the ~5.5yr Alpaca IEX window. Live websocket tick streaming is also free on Alpaca; historical tick playback requires Alpaca Plus ($99/mo) or Polygon (~$99-199/mo) and is **not** built — most retail dashboards show live ticks, not historical.
 
 ## Setup
 
@@ -132,14 +140,33 @@ uv run python examples/run_trading_node.py --exec-mode alpaca-paper --poll-secon
 
 `paper=True` is hardcoded; real-money rollout is a 1-line config change gated by `docs/superpowers/specs/2026-05-27-stage-8-deploy-checklist.md`. Read that checklist end-to-end before considering real capital.
 
-### Dashboard (Stage 7)
+### Dashboard (Stage 7 + Stage 9 — 7 tabs, TradingView-style multi-timeframe)
 
 ```bash
+# 1. (optional, recommended) Populate intraday cache from Alpaca free-tier IEX
+uv run python data/ingest_alpaca_intraday.py --timeframe 5m
+uv run python data/ingest_alpaca_intraday.py --timeframe 1h
+
+# 2. Launch dashboard
 uv run streamlit run dashboard/app.py
 # -> opens on http://localhost:8501
 ```
 
-Five tabs covering equity curves, harness verdicts (Stage 3 + Stage 5/6), sentiment ablation, model coverage + feature importances, and the research journal. Read-only over the same `results/` / `models/cache*/` / `nlp/cache/` / `data/news/` artifacts the runnables produce.
+**Tabs** (Stage 7 + Stage 9 combined):
+
+| Tab | What you see |
+|---|---|
+| Equity | TradingView-style candlestick + volume chart with timeframe selector: 1m / 5m / 15m / 30m / 1h / 4h / 1d / 1w / 1M / 1Y. Ticker selector over the 12-ETF universe. |
+| Backtest Lab | Auto-discovered strategy + auto-rendered param form. Three modes: Single backtest / Grid sweep (≤200 cells) / Optuna optimization. Same engine as the canonical Stage-3 harness. |
+| Strategy Runner | Form-driven launcher for `run_trading_node.py` (exec-mode + fast-replay or poll cadence). Streams subprocess output inline. |
+| Harness Verdicts | Stage-3 winner JSON + Stage-5/6 baseline-vs-meta cards with %-delta. |
+| Sentiment | Stage-6 ablation verdict + per-fold ΔIC + per-ticker headline browser. |
+| Models | `models/cache/` + `cache_v2/` coverage pivots + LightGBM feature importances. |
+| Journal | All `docs/superpowers/specs/*.md` + `plans/*.md` rendered inline, newest first. |
+
+Built on `streamlit-lightweight-charts` (MIT, 223⭐ Streamlit-native wrapper around TradingView's open-source `lightweight-charts` JS library, Apache 2.0). Strategy auto-discovery via `pkgutil`; param-form auto-render via msgspec `__struct_fields__` introspection. Optuna mode hands off to `optuna-dashboard` (MIT, separate browser tab) for parallel-coords / hyperparameter-importance / contour plots — don't re-implement what's already free.
+
+**Costs**: $0/mo as designed. All deps MIT / Apache. Alpaca free-tier IEX gives ~5 years of 1m → 1h history + ~5.5 years daily. Optional Tiingo Power ($30/mo) gives 30+ years of daily history if needed.
 
 ### Sentiment ablation (Stage 6)
 
