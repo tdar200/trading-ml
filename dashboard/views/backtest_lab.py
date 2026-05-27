@@ -131,37 +131,68 @@ def field_default(name_or_field, config_cls: type | None = None) -> Any:
 
 # ---- view -----------------------------------------------------------------
 
+def _ann_kind(ann) -> str:
+    """Classify an annotation (which may be a string under PEP 563 lazy
+    evaluation OR an actual type) into one of: 'int', 'float', 'bool',
+    'str', 'tuple-str', 'unknown'.
+
+    Both shapes are common: ``from __future__ import annotations`` in the
+    strategy file leaves ``__annotations__`` as raw strings; without it the
+    annotations are resolved types.
+    """
+    if ann in (int, "int"):
+        return "int"
+    if ann in (float, "float"):
+        return "float"
+    if ann in (bool, "bool"):
+        return "bool"
+    if ann in (str, "str"):
+        return "str"
+    ann_str = str(ann).lower()
+    if "tuple" in ann_str and "str" in ann_str:
+        return "tuple-str"
+    return "unknown"
+
+
 def _render_param_form(config_cls: type, key_prefix: str) -> dict:
     """Auto-render a parameter form per the msgspec StrategyConfig schema.
 
     Iterates the subclass's own annotations (so the 16+ inherited base
     fields don't clutter the form). Returns a dict {field_name: value}
     ready to splat into the config constructor.
+
+    Handles both PEP-563 stringified annotations and resolved types via
+    ``_ann_kind`` — without that, ``int`` annotations evaluated as the
+    string ``"int"`` would fall through to ``st.text_input``, and the user
+    would submit a string into an int-typed config, producing a
+    ``"can only concatenate str (not 'int') to str"`` TypeError downstream.
     """
     values: dict = {}
     for name, (ann, default) in config_fields(config_cls).items():
         widget_key = f"{key_prefix}__{name}"
-        # Strings first since other branches don't catch them.
-        if ann is str:
+        kind = _ann_kind(ann)
+        if kind == "str":
             values[name] = st.text_input(name, value=str(default or ""), key=widget_key)
-        elif ann is int:
-            values[name] = st.number_input(name, value=int(default or 0), step=1, key=widget_key)
-        elif ann is float:
-            values[name] = st.number_input(name, value=float(default or 0.0), format="%.4f", key=widget_key)
-        elif ann is bool:
+        elif kind == "int":
+            values[name] = int(
+                st.number_input(name, value=int(default if default is not None else 0),
+                                step=1, key=widget_key)
+            )
+        elif kind == "float":
+            values[name] = float(
+                st.number_input(name, value=float(default if default is not None else 0.0),
+                                format="%.4f", key=widget_key)
+            )
+        elif kind == "bool":
             values[name] = st.checkbox(name, value=bool(default), key=widget_key)
+        elif kind == "tuple-str":
+            values[name] = tuple(
+                st.multiselect(name, options=list(ALL_TICKERS),
+                               default=list(default) if default else list(UNIVERSE),
+                               key=widget_key)
+            )
         else:
-            # tuples and other complex types: show a multiselect over the universe
-            # if it looks ticker-shaped, else a text input.
-            ann_str = str(ann).lower()
-            if "tuple" in ann_str and "str" in ann_str:
-                values[name] = tuple(
-                    st.multiselect(name, options=list(ALL_TICKERS),
-                                   default=list(default) if default else list(UNIVERSE),
-                                   key=widget_key)
-                )
-            else:
-                values[name] = st.text_input(name, value=str(default), key=widget_key)
+            values[name] = st.text_input(name, value=str(default), key=widget_key)
     return values
 
 

@@ -70,3 +70,39 @@ def test_config_fields_excludes_inherited():
     # And NOT the inherited ones
     assert "strategy_id" not in fields
     assert "oms_type" not in fields
+
+
+def test_ann_kind_handles_pep563_string_annotations():
+    """Regression for the 'can only concatenate str (not int) to str' TypeError:
+    the strategy file uses ``from __future__ import annotations`` so
+    ``__annotations__`` returns string literals ('int', 'float', 'str', ...)
+    not type objects. _ann_kind must classify both shapes."""
+    from dashboard.views.backtest_lab import _ann_kind
+    # PEP-563 string form
+    assert _ann_kind("int") == "int"
+    assert _ann_kind("float") == "float"
+    assert _ann_kind("bool") == "bool"
+    assert _ann_kind("str") == "str"
+    assert _ann_kind("tuple[str, ...]") == "tuple-str"
+    # Resolved-type form (some files don't use future-annotations)
+    assert _ann_kind(int) == "int"
+    assert _ann_kind(float) == "float"
+    assert _ann_kind(bool) == "bool"
+    assert _ann_kind(str) == "str"
+    # Unknown
+    assert _ann_kind("dict[str, int]") == "unknown"
+    assert _ann_kind(list) == "unknown"
+
+
+def test_ann_kind_matches_real_strategy_configs():
+    """Verifies the bug doesn't return — every numeric field in our two
+    strategies must classify as int or float, not 'unknown'."""
+    from dashboard.views.backtest_lab import config_fields, _ann_kind
+    from strategies.momentum_topn import MomentumTopNConfig
+    fields = config_fields(MomentumTopNConfig)
+    # top_n, lookback_days, skip_days are ints; benchmark is str; universe is tuple-str
+    assert _ann_kind(fields["top_n"][0]) == "int"
+    assert _ann_kind(fields["lookback_days"][0]) == "int"
+    assert _ann_kind(fields["skip_days"][0]) == "int"
+    assert _ann_kind(fields["benchmark"][0]) == "str"
+    assert _ann_kind(fields["universe"][0]) == "tuple-str"
