@@ -1,6 +1,7 @@
 """Stage-4.5 real-catalog parity regression.
 
-Regression gate for the parity gap diagnosed and fixed in Stage-4.5:
+Regression gate for the parity gap diagnosed and fixed in Stage-4.5 (and
+its follow-up):
 
 - Cause 1: ``LiveRiskEngineConfig.max_order_submit_rate`` defaulted to
   "100/00:00:01" which throttled ~2/3 of orders under fast-replay
@@ -8,14 +9,26 @@ Regression gate for the parity gap diagnosed and fixed in Stage-4.5:
 - Cause 2: livesim filled at next-bar OPEN; BacktestEngine fills at
   same-bar CLOSE (Nautilus daily-bar SimulatedExchange semantic). The
   overnight gap drove ~5% systematic drift.
+- Cause 3 (follow-up): the strategy fired rebalance on the FIRST tradeable
+  universe bar each new month. Bars within a day's group are sorted by
+  ticker index in ``ALL_TICKERS = UNIVERSE + (BENCHMARK,)``, so when XLK
+  (index 0) triggered the rebalance, ``self._closes[t][-1]`` for tickers
+  later in the iteration (XLF, XLE, ...) was YESTERDAY's close. The
+  livesim exec client buffered fills against the most-recently-seen bar,
+  which streamed in mid-cmd-drain, so BUYs for those tickers actually
+  filled at TODAY's close. On an overnight gap-up day this overshot the
+  budget and crashed with ``AccountBalanceNegative``. Fixed by anchoring
+  the trigger to the benchmark (always the LAST bar of the day's group);
+  by then ``_closes`` for every universe ticker is TODAY's close.
 
-With both fixes in place, the TradingNode fast-replay equity should match
-BacktestEngine equity within 2% over the real ETF catalog. Skipped if the
-catalog is absent.
+With all three fixes in place, TradingNode fast-replay equity matches
+BacktestEngine equity within 2% over the full real catalog. Skipped if
+the catalog is absent.
 
-To keep test runtime reasonable, the parity test runs over a 1-year
-sub-window of the full ~5.5-year catalog (enough to trigger multiple
-rebalances and rotations).
+Window selection: the 1-year window (2021→2022) used in the original
+Stage-4.5 regression DID NOT cover the 2022-10-03 rebalance that crashed
+under the full catalog (Cause 3). This regression now uses a 2-year window
+spanning that bar, which still completes well under 60s.
 """
 from __future__ import annotations
 
@@ -49,13 +62,14 @@ from livesim.node_config import (
 from strategies.momentum_topn import MomentumTopNConfig, MomentumTopNStrategy
 
 
-# Window: 1 year of the real catalog (2021-01-01 → 2022-01-01).
-# Catalog covers ~2020-07-27 → ~2026-05; this window has enough warm-up data
-# behind it (sector ETFs start 2020-07-27) for the strategy's 63-day lookback
-# to be valid from the start of the window. 1 year gives ~12 monthly
-# rebalances — enough to surface cross-ticker rotation behaviour.
+# Window: 2 years of the real catalog (2021-01-01 → 2023-01-01).
+# Catalog covers ~2020-07-27 → ~2026-05; this window has enough warm-up
+# data behind it (sector ETFs start 2020-07-27) for the strategy's 63-day
+# lookback to be valid from the start of the window, AND it spans the
+# 2022-10-03 rebalance that exposed Cause 3 in the follow-up. 2 years
+# gives ~24 monthly rebalances. Runtime stays well under 60s.
 _WINDOW_START = datetime(2021, 1, 1, tzinfo=timezone.utc)
-_WINDOW_END = datetime(2022, 1, 1, tzinfo=timezone.utc)
+_WINDOW_END = datetime(2023, 1, 1, tzinfo=timezone.utc)
 
 _CATALOG_PATH = Path(__file__).parent.parent / "data" / "catalog"
 
