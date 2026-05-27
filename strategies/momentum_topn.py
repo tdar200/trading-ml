@@ -8,6 +8,24 @@ in `strategies.ranking`.
 
 SPY is subscribed as a benchmark — its bars feed into the buffer like the
 tradeable tickers do, but the Strategy never places an order on it.
+
+Stage-4.5 follow-up: the rebalance fires on the **benchmark** (SPY) bar each
+new month, not the first tradeable bar. Reason: bars arrive interleaved
+across tickers within each day, ordered by ticker index in
+``data.tickers.ALL_TICKERS = UNIVERSE + (BENCHMARK,)``. If the rebalance
+triggered on the first universe bar (e.g. XLK), the strategy's
+``self._closes[t][-1]`` for tickers later in the iteration order (XLF, XLE,
+XLY, ...) would still hold YESTERDAY's close — today's bars for those
+tickers had not arrived yet. The rebalance budgets ``target_shares =
+int(per_name_usd / last_close)`` using that stale price, and the livesim
+exec client (which buffers fills against the most-recently-seen bar's
+close) ended up filling BUYs at TODAY's close after their bars streamed in
+mid-cmd-drain. On an overnight gap-up day (e.g. 2022-10-03), the strategy
+under-budgeted the BUY notional → actual cash debit exceeded available cash
+→ ``AccountBalanceNegative`` on the full-catalog replay. Anchoring the
+trigger to the benchmark (always the LAST bar of each day's group) ensures
+all universe-ticker closes are TODAY's at decision time, so budgeting and
+fills both reference the same prices.
 """
 from __future__ import annotations
 
@@ -79,9 +97,14 @@ class MomentumTopNStrategy(Strategy):
                     # account / equity may be unavailable in very early bars before init
                     pass
 
-        # Rebalance check — only on tradeable-universe bars, only after warm-up,
-        # only when this bar's month differs from the last rebalance month.
-        if ticker not in self.config.universe:
+        # Rebalance check — only on BENCHMARK bars, only after warm-up, only
+        # when this bar's month differs from the last rebalance month. The
+        # benchmark bar is the LAST bar in each day's bar group (it follows
+        # all universe tickers in ``ALL_TICKERS = UNIVERSE + (BENCHMARK,)``),
+        # so by the time we get here ``self._closes[t][-1]`` for every
+        # universe ticker has been updated with TODAY's close. See module
+        # docstring for the parity-bug history that motivates this choice.
+        if ticker != self.config.benchmark:
             return
         if not self._is_warmed_up():
             return
