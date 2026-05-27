@@ -36,6 +36,7 @@ from nautilus_trader.persistence.catalog.parquet import ParquetDataCatalog
 from data.instruments import VENUE_MIC, build_universe_instruments
 from data.tickers import ALL_TICKERS, BENCHMARK, UNIVERSE
 from livesim.factories import (
+    AlpacaPaperExecClientFactory,
     CatalogDataClientFactory,
     SimulatedExecClientFactory,
     get_last_data_client,
@@ -71,7 +72,8 @@ def make_catalog_bar_provider(catalog_path: Path):
     return provider
 
 
-async def _run(fast_replay: bool, poll_seconds: float | None, slippage_prob: float) -> int:
+async def _run(fast_replay: bool, poll_seconds: float | None, slippage_prob: float,
+               exec_mode: str = "simulated") -> int:
     reset_registries()
 
     # 1. Bar provider from the real catalog.
@@ -109,7 +111,11 @@ async def _run(fast_replay: bool, poll_seconds: float | None, slippage_prob: flo
     # 4. Construct + register factories + build.
     node = TradingNode(config=config)
     node.add_data_client_factory(VENUE_MIC, CatalogDataClientFactory)
-    node.add_exec_client_factory(VENUE_MIC, SimulatedExecClientFactory)
+    if exec_mode == "alpaca-paper":
+        print("exec mode: alpaca-paper (Stage 8 — orders go to Alpaca paper account)")
+        node.add_exec_client_factory(VENUE_MIC, AlpacaPaperExecClientFactory)
+    else:
+        node.add_exec_client_factory(VENUE_MIC, SimulatedExecClientFactory)
     node.build()
 
     # 5. Add instruments to the cache so the strategy can resolve them.
@@ -202,7 +208,13 @@ def main() -> int:
         "--slippage-prob",
         type=float,
         default=0.25,
-        help="SimulatedLiveExecutionClient slippage probability (0.0-1.0, default 0.25).",
+        help="SimulatedLiveExecutionClient slippage probability (0.0-1.0, default 0.25). Ignored when --exec-mode=alpaca-paper.",
+    )
+    parser.add_argument(
+        "--exec-mode",
+        choices=("simulated", "alpaca-paper"),
+        default="simulated",
+        help="simulated: in-process fill simulator (default). alpaca-paper: route orders to the Alpaca paper account (Stage 8; requires ALPACA_API_KEY / ALPACA_API_SECRET in .env).",
     )
     args = parser.parse_args()
     # uvloop + Nautilus TradingNode.run_async() interact poorly on shutdown:
@@ -217,6 +229,7 @@ def main() -> int:
                 fast_replay=args.fast_replay,
                 poll_seconds=args.poll_seconds,
                 slippage_prob=args.slippage_prob,
+                exec_mode=args.exec_mode,
             )
         )
     except RuntimeError as e:

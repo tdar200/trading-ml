@@ -47,7 +47,12 @@ for the full design, philosophy, and staged roadmap.
     - **Models** — `models/cache/` + `cache_v2/` coverage pivot + LightGBM feature importances (latest cutoff, first combo)
     - **Journal** — all `docs/superpowers/specs/*.md` + `plans/*.md` rendered inline, newest first
   - [x] Run: `uv run streamlit run dashboard/app.py` → opens on http://localhost:8501. Every loader is `@st.cache_data(ttl=300)` wrapped; views degrade gracefully (empty-state messages with the command to produce missing data).
-- [ ] Stage 8 — Live-trading Alpaca exec adapter (next; multi-month observation gate is uncompressable per design spec §5)
+- [~] Stage 8 — Alpaca paper-trading execution adapter (code complete; **3-month observation gate uncompressable per design spec §5**)
+  - [x] `livesim/alpaca_exec_client.py` — `AlpacaLiveExecutionClient` implements the Nautilus `LiveExecutionClient` interface against alpaca-py's `TradingClient`. MARKET orders, paper-account only. Polling loop (1 Hz) emits Nautilus `OrderFilled` events from Alpaca fills. SELL-before-BUY pacing (0.5s) preserves the cash-account safety pattern. **Only module in the project that imports `alpaca.trading`** — data side stays catalog-driven.
+  - [x] `livesim/factories.py::AlpacaPaperExecClientFactory` + `examples/run_trading_node.py` `--exec-mode {simulated, alpaca-paper}` CLI flag. Simulated remains default.
+  - [x] `examples/preflight_alpaca.py` — stand-alone smoke confirms connectivity (account id, equity, buying power, positions, recent orders). **Verified against the user's real paper account: equity $100k, status ACTIVE.**
+  - [x] `docs/superpowers/specs/2026-05-27-stage-8-deploy-checklist.md` — the human-action checklist for the 3-month paper observation that must precede real-money rollout. Real-money rollout is a 1-line config change (`paper=False`) gated entirely by this checklist, not by code complexity.
+  - [ ] **3-month paper observation** (the parent spec gate). I cannot complete this in-session — it requires daily runs over ≥3 months with the metrics in checklist §C-E. Real-money rollout follows §F-G only if all gates pass.
 
 ## Setup
 
@@ -114,6 +119,18 @@ uv run python examples/run_trading_node.py                                    # 
 Wires `MomentumTopNStrategy` into Nautilus's `TradingNode` runtime via livesim's `CatalogLiveDataClient` + `SimulatedLiveExecutionClient`. Prints final equity. Strategy code is unchanged from Stage 2 (research→live parity).
 
 Stage-4.5 and its 2026-05-27 follow-up closed the real-catalog parity gap (was ~29%, now drift=0.000000 over the 2-year regression window; full-catalog run completes without overdraft). See the Stage 4 status entry above for the four root causes (risk-engine throttle, fill-bar semantic, `_on_bar`/`_submit_order` ordering on the msgbus, and the strategy's stale-close decision-time references). The regression test `tests/test_live_sim_parity_real_catalog.py` widened its window to 2021→2023 to cover the 2022-10-03 rebalance that exposed cause 4 and gates real-catalog drift at 2%.
+
+### Alpaca paper trading (Stage 8 — code-complete; multi-month observation gate before real money)
+
+```bash
+# 1. Preflight — verify paper-account credentials + connectivity
+uv run python examples/preflight_alpaca.py
+
+# 2. Run the live node against Alpaca paper (orders go to the real broker)
+uv run python examples/run_trading_node.py --exec-mode alpaca-paper --poll-seconds 60
+```
+
+`paper=True` is hardcoded; real-money rollout is a 1-line config change gated by `docs/superpowers/specs/2026-05-27-stage-8-deploy-checklist.md`. Read that checklist end-to-end before considering real capital.
 
 ### Dashboard (Stage 7)
 

@@ -31,6 +31,7 @@ from nautilus_trader.model.currencies import USD
 from nautilus_trader.model.enums import AccountType, OmsType
 from nautilus_trader.model.identifiers import ClientId, Venue
 
+from livesim.alpaca_exec_client import AlpacaLiveExecutionClient
 from livesim.data_client import CatalogLiveDataClient
 from livesim.exec_client import SimulatedLiveExecutionClient
 from livesim.node_config import get_data_client_params, get_exec_client_params
@@ -124,6 +125,42 @@ class SimulatedExecClientFactory(LiveExecClientFactory):
         client = SimulatedLiveExecutionClient(
             slippage_prob=params.slippage_prob,
             random_seed=params.random_seed,
+            starting_balance_usd=params.starting_balance_usd,
+            loop=loop,
+            client_id=ClientId(name),
+            venue=Venue(name),
+            oms_type=OmsType.NETTING,
+            account_type=AccountType.CASH,
+            base_currency=USD,
+            instrument_provider=InstrumentProvider(),
+            msgbus=msgbus,
+            cache=cache,
+            clock=clock,
+        )
+        _LAST_EXEC_CLIENT[name] = client
+        return client
+
+
+class AlpacaPaperExecClientFactory(LiveExecClientFactory):
+    """Factory for ``AlpacaLiveExecutionClient`` — Stage-8 paper-account adapter.
+
+    Credentials come from ``ALPACA_API_KEY`` / ``ALPACA_API_SECRET`` env vars
+    (loaded from .env). Real-money rollout is gated by the deploy checklist;
+    this factory always passes ``paper=True``.
+    """
+
+    @staticmethod
+    def create(
+        loop,
+        name: str,
+        config,
+        msgbus,
+        cache,
+        clock,
+    ) -> AlpacaLiveExecutionClient:
+        params = get_exec_client_params(name)
+        client = AlpacaLiveExecutionClient(
+            paper=True,
             starting_balance_usd=params.starting_balance_usd,
             loop=loop,
             client_id=ClientId(name),
