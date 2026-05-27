@@ -156,13 +156,26 @@ def main() -> int:
           f"{meta_df.groupby(['model_store_label', 'filter_threshold'])['sharpe'].median().max():.4f}")
 
     # 3. Deflated Sharpe over baseline + meta combos.
-    sharpes = pd.concat([base_df["sharpe"], meta_df["sharpe"]]).dropna().tolist()
-    # Conservative n_obs: shortest (first) window's day count. Inflates
-    # σ_SR_obs and biases the deflated z toward "NO" — appropriate for a
-    # meta-overlay where false positives cost more than false negatives.
-    n_obs = int(meta_df["n_days"].iloc[0]) if len(meta_df) else int(base_df["n_days"].iloc[0])
+    # Stage-5.5: conservative per-combo-median formulation. Each meta combo's
+    # trial Sharpe is the median across windows (= what the verdict line
+    # actually compares). n_trials = 1 baseline + 24 meta combos = 25, the
+    # honest count of distinct hypotheses tested. Previous formulation passed
+    # 125 (combo × window) Sharpes, which inflates the multiple-testing
+    # penalty's expected_max but also treats correlated trials as independent.
+    baseline_trial = float(base_df["sharpe"].median())
+    meta_trials = (
+        meta_df.groupby(["model_store_label", "filter_threshold"])["sharpe"]
+        .median()
+        .dropna()
+        .tolist()
+    )
+    sharpes = [baseline_trial] + meta_trials
+    # n_obs reflects the per-trial observation count, which is now the median
+    # window's day count (each trial Sharpe is a per-combo median).
+    n_obs = int(meta_df["n_days"].median()) if len(meta_df) else int(base_df["n_days"].median())
     dsr = deflated_sharpe(sharpes=sharpes, n_obs=n_obs)
-    print(f"DSR: p-value={dsr['p_value']:.4f}, z={dsr['deflated_sharpe']:.4f}")
+    print(f"DSR (per-combo-median, n_trials={len(sharpes)}): "
+          f"p-value={dsr['p_value']:.4f}, z={dsr['deflated_sharpe']:.4f}")
 
     # 4. Summary report.
     baseline_median = float(base_df["sharpe"].median())
