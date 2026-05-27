@@ -1,5 +1,5 @@
 """
-SimulatedLiveExecutionClient — accepts orders and emits fills at the next bar.
+SimulatedLiveExecutionClient — accepts orders and emits fills at same-bar close.
 
 Subscribes (via the message bus) to bar events emitted by the data client.
 On each bar for an instrument we have a pending order for, this client
@@ -9,6 +9,21 @@ timestamp group (trading day), which emits the buffered fills in
 SELL-before-BUY order. This mirrors BacktestEngine behaviour where fills
 within the same rebalance always clear the SELL side first so that freed
 cash is available before the BUY side debits the account.
+
+Stage-4.5 fix — fill semantic matches BacktestEngine:
+    Fills are computed against the **decision bar's close** (the bar whose
+    ``on_bar`` invocation produced the order). This matches Nautilus's
+    daily-bar ``SimulatedExchange`` semantic: without tick data the
+    exchange fills market orders at the bar's close (the only
+    "post-decision" price available within the same bar). The earlier
+    livesim implementation deferred fills to the NEXT bar's open, which
+    drifted from BacktestEngine by ~5% on the real catalog because of
+    overnight gap risk between the decision bar close and the next bar
+    open. We now: (a) drop the next-bar defer guard, (b) fill at
+    ``bar.close``, (c) keep the SELL-before-BUY buffering — the buffering
+    is still required because cross-ticker rotation days submit BUY and
+    SELL orders on the same bar's processing, and on a CASH account the
+    BUY must not debit before the SELL credit arrives.
 
 Background (why buffering is needed): in the livesim's async architecture,
 the exec client's ``_on_bar`` handler fires synchronously on every bar in
@@ -79,14 +94,22 @@ def compute_fill_price(
 ) -> Decimal:
     """Pure helper: compute the simulated fill price for an order against a bar.
 
+    Returns the **same-bar close** (Stage-4.5 fix). Nautilus's
+    ``SimulatedExchange`` fills daily-bar market orders against the bar's
+    close — the only "post-decision" price available without tick data —
+    so BacktestEngine uses ``bar.close``. The livesim previously used
+    ``bar.open`` against the NEXT bar, which produced systematic drift
+    via overnight gaps; aligning to ``bar.close`` of the decision bar
+    eliminates that gap.
+
     Buys slip UP by ``slippage_ticks * tick_size`` (worse price for the buyer);
     sells slip DOWN by the same amount (worse price for the seller). With
-    ``slippage_ticks == 0`` the bar's open price is returned unchanged.
+    ``slippage_ticks == 0`` the bar's close price is returned unchanged.
 
     This function has no Nautilus-runtime dependencies and is trivially
     unit-testable.
     """
-    base = Decimal(str(bar.open))
+    base = Decimal(str(bar.close))
     delta = Decimal(slippage_ticks) * tick_size
     if side == OrderSide.BUY:
         return base + delta
@@ -101,7 +124,12 @@ _FillEntry = tuple  # (order, VenueOrderId, Decimal, Bar)
 
 
 class SimulatedLiveExecutionClient(LiveExecutionClient):
-    """Simulated live exec client — fills pending orders at the next bar's open.
+    """Simulated live exec client — fills pending orders at same-bar close.
+
+    Stage-4.5 semantic: orders are filled at the close of the bar that the
+    strategy decided on (matches BacktestEngine's daily-bar SimulatedExchange).
+    Fills are buffered per-day and flushed in SELL-before-BUY order so cash
+    accounts never overdraw on rotation days.
 
     Constructor accepts Stage-4-specific kwargs (``slippage_prob``,
     ``random_seed``, ``starting_balance_usd``) plus the base-class kwargs
@@ -123,12 +151,27 @@ class SimulatedLiveExecutionClient(LiveExecutionClient):
         self._slippage_prob = slippage_prob
         self._rng = random.Random(random_seed)
         self._starting_balance_usd = starting_balance_usd
-        # ticker → list of (order, venue_order_id, submitted_at_ts_event) tuples.
-        # submitted_at_ts_event is the ts_event of the bar current when the order
-        # was submitted; orders are only eligible to fill on bars AFTER that ts.
+        # ticker → most-recently-seen Bar. Updated in _on_bar; read in
+        # _submit_order so fills land at the SAME bar's close that the
+        # strategy decided on — even though SubmitOrder reaches us
+        # asynchronously, AFTER the strategy's on_bar handler returned and
+        # AFTER our own _on_bar has already processed the bar (both
+        # subscribers fire from the same msgbus dispatch; the exec client
+        # observes the bar BEFORE the strategy submits orders against it).
+        # Without this dict, an order submitted on ticker T's bar misses
+        # filling at T's close: by the time SubmitOrder arrives, T's bar
+        # is already in the past and _on_bar will not fire for T again
+        # until the NEXT day — the SELL never flushes in time and the
+        # rotation's BUYs (which DO get filled because they happen to be
+        # later in the day's bar sequence) overdraw the account.
+        self._last_bar_by_ticker: dict[str, Bar] = {}
+        # ticker → list of (order, venue_order_id) tuples. Holds orders
+        # submitted before any bar for that ticker has been seen (e.g. an
+        # order routed before the data client has emitted any data). With
+        # buffer-at-submit-time semantics, this should normally stay empty
+        # post-warmup; any non-empty residue at the end of fast-replay
+        # surfaces in the integration test's diagnostics.
         self._pending: dict[str, list] = {}
-        # ts_event of the most recently processed bar (updated in _on_bar).
-        self._current_bar_ts_event: int = 0
         # Buffered fills waiting for flush_buffered_fills() — split by side so
         # SELLs are always emitted before BUYs within a day (mirrors BacktestEngine).
         self._buffered_fills_sell: list[_FillEntry] = []
@@ -185,7 +228,8 @@ class SimulatedLiveExecutionClient(LiveExecutionClient):
         The exec engine only accepts an OrderFilled against an order that is
         already in the ACCEPTED state — without these two prior events the
         fill is dropped with "Cannot apply event to any order". So we emit
-        them inline at submit time, then defer the fill itself to the next bar.
+        them inline at submit time, then buffer the fill itself for
+        end-of-day flush (Stage-4.5: same-bar close semantic).
 
         ``command`` is a ``SubmitOrder`` message (§12.5) with an ``.order``
         attribute. The fall-through ``else`` branch tolerates being handed a
@@ -211,16 +255,27 @@ class SimulatedLiveExecutionClient(LiveExecutionClient):
         )
 
         ticker = str(order.instrument_id).split(".")[0]
-        # Record the ts_event of the bar being processed when this command
-        # arrived; _on_bar uses this to skip fills for same-ts bars (fill
-        # happens on the NEXT bar for this ticker, matching BacktestEngine).
-        self._pending.setdefault(ticker, []).append(
-            (order, venue_order_id, self._current_bar_ts_event)
-        )
+        # Stage-4.5: buffer the fill immediately against the most-recently-
+        # seen bar's close for this ticker. The exec client subscribes to
+        # data.bars.* and its _on_bar fires BEFORE the strategy's on_bar
+        # (both are msgbus subscribers on the same topic), so by the time
+        # SubmitOrder arrives here the bar that "produced" this order is
+        # the LAST bar we saw for this ticker. Filling against its close
+        # matches BacktestEngine's same-bar close semantic.
+        #
+        # If no bar has been seen yet (rare — only if SubmitOrder somehow
+        # routes before any data), park the order in _pending; _on_bar's
+        # residual-flush path will handle it when the first bar arrives.
+        last_bar = self._last_bar_by_ticker.get(ticker)
+        if last_bar is not None:
+            self._buffer_fill(order=order, venue_order_id=venue_order_id, bar=last_bar)
+        else:
+            self._pending.setdefault(ticker, []).append((order, venue_order_id))
 
     async def _cancel_order(self, command) -> None:
-        # No-op for the sim: fills happen on the very next bar so a real
-        # cancellation race is not exercised.
+        # No-op for the sim: fills happen on the same bar's close (or are
+        # buffered for end-of-day flush), so a real cancellation race is not
+        # exercised by this strategy.
         return None
 
     async def _cancel_all_orders(self, command) -> None:
@@ -251,57 +306,53 @@ class SimulatedLiveExecutionClient(LiveExecutionClient):
     # ------------------------------------------------------------------
 
     def _on_bar(self, bar: Bar) -> None:
-        """Buffer fills for pending orders for this bar's instrument.
+        """Record the latest bar per ticker; flush any pre-bar-routed pending.
 
         Wired in ``_connect`` to the ``data.bars.*`` msgbus topic; the data
         client emits via ``self._handle_data`` which the data engine then
         publishes to this topic.
 
-        Fills are NOT emitted immediately — they are buffered into
-        ``_buffered_fills_sell`` / ``_buffered_fills_buy`` and flushed by
-        ``flush_buffered_fills()`` at end-of-day (called by the data client
-        after each timestamp group). This ensures SELLs are always settled
-        before BUYs, preventing ``AccountBalanceNegative`` on rotation days
-        where the SELL ticker appears later in the bar sequence than the
-        BUY ticker.
+        Stage-4.5 semantic: this handler fires BEFORE the strategy's
+        on_bar handler for the same bar (both are subscribers to the same
+        topic; the exec client subscribes first). So when this handler
+        runs, the strategy has NOT yet decided to submit any orders for
+        this bar. We just record the bar for later use by ``_submit_order``,
+        which will be invoked later (asynchronously, via the exec engine's
+        command queue) and will buffer the fill against this bar's close.
 
-        Orders submitted while THIS bar was being processed carry
-        ``submitted_at_ts_event == bar.ts_event`` and are deferred to the
-        next bar (same-day fill guard).
+        The residual ``_pending`` path handles the rare case where a
+        SubmitOrder arrived before any bar for the ticker was ever seen
+        (e.g. cold-start ordering races); those orders are flushed at the
+        first bar that does arrive.
         """
         if not isinstance(bar, Bar):
             return
-        # Update current ts so _submit_order can stamp orders submitted
-        # during this bar's processing (they'll be deferred to the next bar).
-        self._current_bar_ts_event = bar.ts_event
         self._bars_received += 1
         ticker = str(bar.bar_type).split(".")[0]
-        if ticker not in self._pending:
-            return
-        # Partition: buffer fills for orders submitted on an EARLIER bar,
-        # defer same-ts orders.
-        deferred: list = []
-        for entry in self._pending[ticker]:
-            order, venue_order_id, submitted_at_ts = entry
-            if submitted_at_ts == bar.ts_event:
-                deferred.append(entry)
-                continue
-            # Order is eligible to fill on this bar.
-            slip_ticks = 1 if self._rng.random() < self._slippage_prob else 0
-            fill_price = compute_fill_price(
-                bar=bar,
-                side=order.side,
-                slippage_ticks=slip_ticks,
-                tick_size=_DEFAULT_TICK_SIZE,
-            )
-            if order.side == OrderSide.SELL:
-                self._buffered_fills_sell.append((order, venue_order_id, fill_price, bar))
-            else:
-                self._buffered_fills_buy.append((order, venue_order_id, fill_price, bar))
-        if deferred:
-            self._pending[ticker] = deferred
-        else:
+        self._last_bar_by_ticker[ticker] = bar
+        if ticker in self._pending:
+            for order, venue_order_id in self._pending[ticker]:
+                self._buffer_fill(order=order, venue_order_id=venue_order_id, bar=bar)
             del self._pending[ticker]
+
+    def _buffer_fill(self, order, venue_order_id: VenueOrderId, bar: Bar) -> None:
+        """Buffer one fill into the SELL or BUY queue at the given bar's close.
+
+        Splits by side so ``flush_buffered_fills()`` can emit SELLs first
+        (frees cash) before BUYs (debits cash) — required on CASH accounts
+        to avoid ``AccountBalanceNegative`` on rotation days.
+        """
+        slip_ticks = 1 if self._rng.random() < self._slippage_prob else 0
+        fill_price = compute_fill_price(
+            bar=bar,
+            side=order.side,
+            slippage_ticks=slip_ticks,
+            tick_size=_DEFAULT_TICK_SIZE,
+        )
+        if order.side == OrderSide.SELL:
+            self._buffered_fills_sell.append((order, venue_order_id, fill_price, bar))
+        else:
+            self._buffered_fills_buy.append((order, venue_order_id, fill_price, bar))
 
     def flush_buffered_fills(self) -> None:
         """Emit all buffered fills: SELLs first, then BUYs.

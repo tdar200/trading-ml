@@ -36,6 +36,7 @@ from nautilus_trader.live.config import (
     LiveDataClientConfig,
     LiveExecClientConfig,
     LiveExecEngineConfig,
+    LiveRiskEngineConfig,
     TradingNodeConfig,
 )
 from nautilus_trader.model.data import Bar
@@ -179,6 +180,18 @@ def build_trading_node_config(
         # §12.3 / §12.9: must be False for stub/sim exec clients or startup
         # gates on a 10-second reconciliation delay.
         exec_engine=LiveExecEngineConfig(reconciliation=False),
+        # Stage-4.5 fix: raise the order-submit throttle above the default
+        # ``100/00:00:01``. Fast-replay drains all backtest orders within ~1s
+        # of WALLCLOCK (LiveClock under TradingNode), so the production
+        # default would DENY ~2/3 of orders and freeze the strategy positions
+        # from the first overload onward (diagnosed: 195 of 295 real-catalog
+        # orders denied on the top_n=3 universe). BacktestEngine uses
+        # TestClock — the throttle window resets per-bar — so it does not
+        # surface the same throttle. For real live-trading deployments,
+        # override this back to a safe value via a wrapper config.
+        risk_engine=LiveRiskEngineConfig(
+            max_order_submit_rate="1000000/00:00:01",
+        ),
         # §12.7: no local-Parquet Cache backend in v1.227.
         cache=None,
     )
