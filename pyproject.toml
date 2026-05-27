@@ -19,6 +19,9 @@ dependencies = [
     "transformers>=4.40",
     "vadersentiment>=3.3.2",
     "streamlit>=1.57.0",
+    "streamlit-lightweight-charts>=0.7.20",
+    "optuna>=4.8.0",
+    "optuna-dashboard>=0.20.0",
 ]
 
 [dependency-groups]

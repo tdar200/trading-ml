@@ -15,7 +15,15 @@ if str(_ROOT) not in sys.path:
 import streamlit as st
 
 from dashboard import data_sources as ds
-from dashboard.views import equity, harness_verdict, journal, models, sentiment
+from dashboard.views import (
+    backtest_lab,
+    equity,
+    harness_verdict,
+    journal,
+    models,
+    sentiment,
+    strategy_runner,
+)
 
 
 # Wrap every loader with Streamlit's cache so the dashboard isn't
@@ -38,16 +46,28 @@ def main() -> None:
     st.title("trading-ml — Research Dashboard")
     sources = _CachedDataSources
 
-    tabs = st.tabs(["Equity", "Harness Verdicts", "Sentiment", "Models", "Journal"])
+    tabs = st.tabs([
+        "Equity",
+        "Backtest Lab",
+        "Strategy Runner",
+        "Harness Verdicts",
+        "Sentiment",
+        "Models",
+        "Journal",
+    ])
     with tabs[0]:
         equity.render(sources)
     with tabs[1]:
-        harness_verdict.render(sources)
+        backtest_lab.render(sources)
     with tabs[2]:
-        sentiment.render(sources)
+        strategy_runner.render(sources)
     with tabs[3]:
-        models.render(sources)
+        harness_verdict.render(sources)
     with tabs[4]:
+        sentiment.render(sources)
+    with tabs[5]:
+        models.render(sources)
+    with tabs[6]:
         journal.render(sources)
 
 
