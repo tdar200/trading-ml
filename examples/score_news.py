@@ -1,11 +1,14 @@
 """
 Stage-6 sentiment scoring runnable: read ingested news, score un-scored
-headlines via FinBERT, persist via SentimentStore.
+headlines via the configured sentiment scorer (currently VADER per the
+nlp/sentiment.py docstring's VADER-for-FinBERT substitution note;
+restoring FinBERT is a drop-in change to ``nlp.sentiment._load_pipeline``),
+persist via SentimentStore.
 
 Usage:
     uv run python examples/score_news.py                  # full
     uv run python examples/score_news.py --smoke          # ~100 headlines
-    uv run python examples/score_news.py --batch-size 64  # tuning
+    uv run python examples/score_news.py --batch-size 64  # tuning (VADER ignores)
 """
 from __future__ import annotations
 

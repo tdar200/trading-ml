@@ -120,6 +120,21 @@ class AlpacaLiveExecutionClient(LiveExecutionClient):
         trading_client=None,  # injectable for tests; otherwise built from credentials
         **kwargs,
     ) -> None:
+        # Stage-8.5 defense-in-depth: real-money rollout is gated by the
+        # 3-month observation in
+        # ``docs/superpowers/specs/2026-05-27-stage-8-deploy-checklist.md``
+        # (§F). Flipping `paper=False` requires a deliberate signed-off
+        # change to this assertion, not just a config-knob tweak — the
+        # checklist is the source of truth, not the code.
+        if not paper:
+            raise RuntimeError(
+                "AlpacaLiveExecutionClient instantiated with paper=False. "
+                "Real-money trading requires Stage-8.1 sign-off per the deploy "
+                "checklist (3-month paper observation + all gates in §F). "
+                "If you have completed the checklist and are intentionally "
+                "rolling to real money, remove this guard with a commit that "
+                "references the checklist sign-off."
+            )
         super().__init__(**kwargs)
         self._paper = paper
         self._fill_poll_seconds = fill_poll_seconds
