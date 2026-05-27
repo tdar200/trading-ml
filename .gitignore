@@ -18,3 +18,4 @@ nlp/cache/
 data/news/
 models/cache_v2/
 .streamlit/
+data/intraday/
