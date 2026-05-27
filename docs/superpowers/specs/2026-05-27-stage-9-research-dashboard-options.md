@@ -213,6 +213,193 @@ The earlier "Stage 9.A in ~1 day" plan stands, but with a different chart layer:
 
 Want me to land it?
 
+## 8. Backtesting / strategy tester / strategy selector — deep dive
+
+The previous sections covered the dashboard shell + chart engine. The "Backtest Lab" tab — strategy selector + parameter form + tester + result comparison — is its own design question with its own established patterns. Five reference implementations:
+
+### 8.1 Pattern: built-in optimizer + plot ([backtesting.py](https://github.com/kernc/backtesting.py), 8.4k ⭐)
+
+The simplest end-to-end. Define a `Strategy` subclass, run `bt.optimize(n1=range(5,50,5), n2=range(10,100,10))`, get a `stats` DataFrame + interactive Bokeh plot via `bt.plot()`. Single-strategy, single-asset, no multi-config comparison built in. Good for a "one strategy at a time" UI; weak for the cross-strategy selector our Stage-3 winner search needs.
+
+### 8.2 Pattern: vectorized parameter sweep ([VectorBT](https://github.com/polakowo/vectorbt), 7.7k ⭐)
+
+The gold standard for "what does this parameter do?" visualization. `vbt.MA.run_combs(price, window=np.arange(2,101), r=2)` evaluates **10,000 dual-SMA combinations in seconds** via NumPy + Numba vectorization. Then:
+
+```python
+pf.total_return().vbt.heatmap(
+    x_level="fast_window", y_level="slow_window", slider_level="symbol",
+    symmetric=True,
+)
+```
+
+→ Plotly heatmap of return-by-parameter with a per-symbol slider. Drill into any cell: `pf[(10, 20, "ETH-USD")].stats()` returns the full per-config stat block.
+
+**For our project**: VectorBT competes with Nautilus on the "engine" axis, so adopting it for parameter-sweep would require routing one strategy through two engines (Nautilus for the deployed path, VectorBT for the explorer). Architectural cost ≠ trivial — better to write a *Nautilus-native* parameter sweep that **mimics** VectorBT's UX (heatmap + drill-down) without forking the engine choice.
+
+### 8.3 Pattern: real-time hyperparameter optimization UI ([optuna-dashboard](https://github.com/optuna/optuna-dashboard), 775 ⭐)
+
+**The killer find for hyperparameter search.** Standalone web app (`pip install optuna-dashboard`, then `optuna-dashboard sqlite:///db.sqlite3`) that visualizes any Optuna study in real time:
+
+- **Optimization history** (objective value vs trial number, with best-so-far line)
+- **Hyperparameter importances** (via random-forest feature importance over completed trials)
+- **Parallel coordinates** plot — see how all hyperparams co-vary
+- **Slice plots** — marginal effect of each param
+- **Contour plots** — pair-wise interactions
+
+Pluggable: SQLite, MySQL, or PostgreSQL backend. Has an **experimental browser-only version** (drag-drop SQLite file at `https://optuna.github.io/optuna-dashboard/`), VS Code extension, and JupyterLab extension.
+
+**Integration with our project**: trivially adaptable. Wrap our existing Stage-3 walk-forward as an Optuna objective:
+
+```python
+def objective(trial):
+    lookback = trial.suggest_int("lookback_days", 30, 200)
+    skip = trial.suggest_int("skip_days", 0, 60)
+    top_n = trial.suggest_int("top_n", 1, 5)
+    cfg = MomentumTopNConfig(universe=UNIVERSE, benchmark=BENCHMARK,
+                             top_n=top_n, lookback_days=lookback, skip_days=skip)
+    return run_walk_forward(cfg).median_window_sharpe  # higher = better
+
+study = optuna.create_study(storage="sqlite:///optuna.db", direction="maximize")
+study.optimize(objective, n_trials=200, n_jobs=4)
+```
+
+Then point optuna-dashboard at `optuna.db` and explore. **This is dramatically richer than our current 5×6×3 = 90-cell grid search**, and the dashboard is built — we just integrate.
+
+### 8.4 Pattern: full-stack admin UI ([FreqUI](https://github.com/freqtrade/frequi), 995 ⭐ Vue.js)
+
+Freqtrade's official frontend. Production-grade reference for "trader-facing strategy tester":
+
+- **Strategy selector** — dropdown auto-populated from the bot's `/strategies/` directory; can view source code in-browser
+- **Pair selector** — multi-select of trading pairs
+- **Timeframe selector** — `1m / 5m / 15m / 1h / 4h / 1d`
+- **Backtest panel** — run a backtest with all the above + date range, watch progress, view results
+- **Hyperopt panel** — define parameter space, run optimization, browse results
+- **Trade list table** — sortable, filterable, with per-trade entry/exit chart overlays
+- **Performance breakdown** — by pair, by month, by strategy, by exit signal
+
+Built with Vue 3 + PrimeVue + TypeScript. Worth examining if our Stage 9.C path materializes — FreqUI is more polished and more battle-tested than Black101081's React project. Crypto-focused so the "pairs" abstraction doesn't 1:1 map to our ETF universe, but the **selector + form + results** UX is the canonical reference.
+
+### 8.5 Pattern: parameter-sweep REST endpoint (Black101081's `/api/nautilus/parameter-sweep`)
+
+Simplest webapp pattern. `POST /api/nautilus/parameter-sweep` accepts:
+```json
+{"fast_range": [5, 50, 5], "slow_range": [10, 100, 10]}
+```
+returns a ranked array of `{fast, slow, pnl}` capped at 25 combinations. Frontend renders the results as a sortable table with the best config highlighted. No real visualization, but cheap to build, easy to wrap in a Streamlit form.
+
+---
+
+## 9. Concrete design for a "Backtest Lab" tab in our dashboard
+
+Synthesizing what works:
+
+### 9.1 Layout (single Streamlit tab, 4 sections)
+
+```
+┌─ Strategy selector ────────────────────────┐
+│ [Strategy ▼] MomentumTopN | MomentumMeta │
+│ [View source ↗]                           │
+└────────────────────────────────────────────┘
+┌─ Parameter form (auto-rendered from        │
+│   Pydantic StrategyConfig schema) ─────────┐
+│ top_n:         [2     ▼]  (1-5)            │
+│ lookback_days: [63    ▼]  (20-252)         │
+│ skip_days:     [0     ▼]  (0-60)           │
+│ universe:      [✓ XLK ✓ XLF ... ]          │
+│ filter_threshold: [0.55] (for meta)        │
+└────────────────────────────────────────────┘
+┌─ Test mode ────────────────────────────────┐
+│ ○ Single backtest                          │
+│ ○ Grid sweep (define ranges)               │
+│ ● Optuna optimization (n_trials, objective)│
+│   Window: [2020-07-27] → [2026-05-22]      │
+│   [Run]                                     │
+└────────────────────────────────────────────┘
+┌─ Results ──────────────────────────────────┐
+│  [Equity tab] [Trades] [Stats] [Heatmap]  │
+│   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│   <chart / table for selected sub-tab>     │
+│   [Save experiment: my-sma-sweep] [Save]   │
+│   [Compare to Stage-3 winner: +X% Sharpe]  │
+└────────────────────────────────────────────┘
+```
+
+### 9.2 Mode-specific behaviors
+
+**Single backtest** — just calls `analysis.runner.run(spec)` with the form values, displays the same per-window summary card the current Harness Verdicts tab uses + an equity overlay vs the deployed strategy. <5 sec for our catalog.
+
+**Grid sweep** — user specifies range per parameter; we call `analysis.walk_forward.walk_forward(...)` (same engine as Stage-3 harness). Results: sortable DataFrame (Sharpe, CAGR, max DD) + 2D heatmap if exactly 2 dimensions varied. Same engine = same numbers as the canonical harness; no engine fork. Limit: ≤200 cells (~1 min compute) before suggesting Optuna mode.
+
+**Optuna optimization** — add Optuna as a dep, wire `objective(trial)` over our walk-forward harness, launch with `n_trials=N`. Pop open optuna-dashboard in a separate browser tab for the rich visualization (parallel coordinates, hyperparam importance) — don't reimplement those in-Streamlit. The dashboard auto-reads from the SQLite file the runner writes to.
+
+### 9.3 Strategy selector — auto-discovery
+
+```python
+# dashboard/data_sources.py
+import importlib, pkgutil, inspect
+from nautilus_trader.config import StrategyConfig
+from nautilus_trader.trading.strategy import Strategy
+
+def discover_strategies() -> dict[str, tuple[type[Strategy], type[StrategyConfig]]]:
+    """Walk strategies/ for (Strategy, StrategyConfig) class pairs."""
+    out = {}
+    for _, name, _ in pkgutil.iter_modules(["strategies"]):
+        mod = importlib.import_module(f"strategies.{name}")
+        strategies = [obj for _, obj in inspect.getmembers(mod, inspect.isclass)
+                      if issubclass(obj, Strategy) and obj is not Strategy]
+        configs = [obj for _, obj in inspect.getmembers(mod, inspect.isclass)
+                   if issubclass(obj, StrategyConfig) and obj is not StrategyConfig]
+        if strategies and configs:
+            out[name] = (strategies[0], configs[0])
+    return out
+```
+
+→ dropdown auto-populates with `momentum_topn`, `momentum_meta`. Adding a new strategy = drop a file in `strategies/`, dashboard picks it up.
+
+### 9.4 Parameter form auto-rendering
+
+Pydantic introspection on the selected StrategyConfig:
+
+```python
+from pydantic.fields import FieldInfo
+
+def render_param_form(config_cls: type[StrategyConfig]) -> dict:
+    """Auto-render st.input widgets per field in the StrategyConfig."""
+    values = {}
+    for name, field in config_cls.model_fields.items():
+        if field.annotation is int:
+            values[name] = st.number_input(name, value=field.default or 0, step=1)
+        elif field.annotation is float:
+            values[name] = st.number_input(name, value=field.default or 0.0, format="%.4f")
+        elif field.annotation is bool:
+            values[name] = st.checkbox(name, value=field.default)
+        elif "tuple" in str(field.annotation).lower():
+            values[name] = st.multiselect(name, options=ALL_TICKERS,
+                                          default=list(field.default or []))
+        # ... more types
+    return values
+```
+
+Zero hand-coded forms, zero drift when a new field is added to a config.
+
+### 9.5 Effort estimate
+
+Stage 9.A' was 1.5 days. Adding the Backtest Lab tab as described:
+- Strategy discovery: ~30 lines
+- Param form auto-render: ~50 lines
+- Single + grid mode wiring to `analysis.walk_forward.walk_forward`: ~80 lines
+- Optuna integration + dashboard launch helper: ~60 lines + 1 new dep (`optuna>=4.0`, `optuna-dashboard>=0.20`)
+- Results display (4 sub-tabs): ~120 lines
+- "Compare to Stage-3 winner" diff: ~30 lines
+- Tests: ~5 unit tests on the discovery + form-render helpers
+
+**Total: +1 day** on top of Stage 9.A'. Combined Stage 9.A' + Lab = ~2.5 days for a dashboard that has:
+- TradingView-quality charts (Equity, future Live)
+- Cross-stage research navigation (Harness Verdicts, Sentiment, Models, Journal)
+- **Self-service backtest + grid sweep + Optuna optimization with auto-discovered strategies and auto-rendered parameter forms**
+
+That's the full vision. The pieces all exist; we're gluing.
+
 ## Sources
 
 Crawled via crawl4ai at `http://localhost:11235/md`:
@@ -220,6 +407,13 @@ Crawled via crawl4ai at `http://localhost:11235/md`:
 - [Backtest visualisation discussion #245](https://github.com/nautechsystems/nautilus_trader/discussions/245) — community feature requests + maintainer responses
 - [Black101081/Nautilus-Web-Interface](https://github.com/Black101081/Nautilus-Web-Interface) — most complete community webapp
 - [Live Trading concepts](https://nautilustrader.io/docs/latest/concepts/live/) — reconciliation primitives a live dashboard would use
+
+Backtest / optimizer / strategy-tester deep-dive crawls:
+- [optuna/optuna-dashboard](https://github.com/optuna/optuna-dashboard) — real-time hyperparameter dashboard (775⭐, MIT, Docker-packaged)
+- [polakowo/vectorbt](https://github.com/polakowo/vectorbt) — vectorized backtester with heatmap UI (7.7k⭐)
+- [kernc/backtesting.py](https://github.com/kernc/backtesting.py) — single-strategy backtester with built-in optimizer + Bokeh plot (8.4k⭐)
+- [freqtrade/frequi](https://github.com/freqtrade/frequi) — production Vue.js frontend for Freqtrade with strategy selector / backtest / hyperopt panels (995⭐)
+- [ranaroussi/quantstats](https://github.com/ranaroussi/quantstats) — `reports.compare(...)` for multi-strategy tearsheet comparison
 
 Plus WebSearch returns linking to:
 - [nautechsystems/nautilus_trader main repo](https://github.com/nautechsystems/nautilus_trader)
