@@ -178,7 +178,9 @@ class CatalogLiveDataClient(LiveMarketDataClient):
         """Drain cmd queue, flush fills (SELLs first), then drain evt queue.
 
         Called between timestamp groups in ``_replay_once`` to ensure:
-        1. All SubmitOrder commands are processed (orders land in _pending).
+        1. All SubmitOrder commands are processed (each routes into the exec
+           client's _submit_order, which buffers a fill against the
+           submitting-bar's close per Stage-4.5 same-bar fill semantics).
         2. Buffered fills are emitted in SELL-before-BUY order.
         3. All resulting fill events are processed (balances + positions updated).
 
@@ -186,7 +188,8 @@ class CatalogLiveDataClient(LiveMarketDataClient):
         BUY ticker-A (low index) fills before SELL ticker-B (high index) on
         the same day, debiting cash before the corresponding credit arrives.
         """
-        # Step 1: drain exec engine command queue so all orders are in _pending.
+        # Step 1: drain exec engine command queue so all SubmitOrder commands
+        # land in _submit_order (which buffers fills directly) before flush.
         for _ in range(_CMD_DRAIN_YIELDS):
             await asyncio.sleep(0)
 

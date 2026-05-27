@@ -194,6 +194,15 @@ async def test_real_catalog_parity_within_2pct():
             f"TradingNode denied {n_denied} orders — Stage-4.5 throttle fix "
             f"regressed. {diagnostics}"
         )
+        # Cause-3 regression gate: if msgbus subscriber order ever flips so
+        # the exec client's _on_bar fires AFTER strategy.on_bar, orders would
+        # sit in _pending instead of buffering on submit, and equity would
+        # silently degrade by one bar's gap. This catches it directly.
+        assert n_pending == 0, (
+            f"TradingNode left {n_pending} orders in _pending — Stage-4.5 "
+            f"submit-time buffering regressed (likely msgbus subscriber-order "
+            f"flip). {diagnostics}"
+        )
     finally:
         try:
             await node.stop_async()
