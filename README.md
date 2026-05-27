@@ -34,7 +34,12 @@ for the full design, philosophy, and staged roadmap.
   - **History:** pre-Stage-4.5-followup numbers were baseline 1.0162 / meta winner 1.3083 (+28.7%) on top_n=3 with the buggy strategy. Post-Stage-4.5-followup on the same top_n=3 baseline (with strategy fix): baseline 0.7393 / meta winner 1.1848 (+60.3%). Re-baselining to top_n=2 (the new Stage-3 winner) raises baseline to 0.9541 and meta winner to 1.2319 (+29.1%). The verdict (meta beats baseline) holds across all three formulations; the magnitude of the edge depends on baseline quality.
   - Stage-5.5 (DSR formulation tightened): switched DSR from per-window-trial (n_trials=125, generous) to **per-combo-median** (n_trials=25, conservative — 1 baseline + 24 meta combos). New numbers: observed Sharpe **1.1848**, expected_max under H0 **0.1591**, deflated **z=23.28**, p=1.0000. The conservative formulation actually *strengthens* the deflated z (observed is the stable per-combo median while expected_max scales sub-linearly with n_trials). Verdict unchanged: **meta clearly beats baseline + survives DSR**.
   - Final-review bugfix: a timestamp-normalization bug in `strategies/momentum_meta.py::_rebalance` (rebalance_date at NYSE-close UTC vs midnight-aligned synthetic feature index) caused the meta strategy to silently stop trading after warm-up on real catalog data, producing an earlier degenerate harness result. Fixed by normalizing `rebalance_date` to midnight; regression test (`test_non_midnight_timestamps_still_trade`) added; harness now refuses to write a verdict when every threshold within a (window, combo) group produces the identical Sharpe.
-- [ ] Stages 6–8 — see design spec
+- [x] Stage 6 — NLP sentiment overlay (clean rejection)
+  - [x] News ingest: `uv run python data/ingest_alpaca_news.py` — Alpaca free-tier `/v1beta1/news`; headlines + per-ticker tags; written to `data/news/<ticker>/<YYYY-MM>.parquet`. Acceptance run: **4251 (ticker, article) rows** across 12 tickers / 2020-07 → 2026-05. Free tier caps responses at 50 items per 30-day window, so per-ticker coverage is sparse (~4 articles/ticker/month on average).
+  - [x] Sentiment scoring: `uv run python examples/score_news.py` → `nlp/cache/finbert-v1/<ticker>.parquet`. **Implementation deviation:** original spec called for FinBERT, but anonymous HuggingFace Hub rate-limit prevented the 440MB model from completing on this machine (multiple `snapshot_download` attempts stalled mid-download). Substituted **VADER** (`vaderSentiment`, lexicon-only, ~100KB, zero downloads, instant inference). FinBERT restoration is a drop-in replacement inside `nlp/sentiment.py::_load_pipeline` when HF Hub is reachable / `HF_TOKEN` is set; rationale + trade-offs documented in that module's docstring. Acceptance: 3600 unique articles scored in **1.3 seconds**; mean=0.01, range [-0.61, +0.54].
+  - [x] Feature integration: 3 sentiment features (`sentiment_7d_mean`, `sentiment_7d_count`, `sentiment_30d_mean`) added to `models/features.py` behind an optional `news_provider` seam. v2 (price + sentiment) trains into `models/cache_v2/`. `MomentumMetaConfig.news_provider_path` wires the SentimentStore through to the strategy at inference time.
+  - [x] Ablation verdict: `uv run python examples/ablate_sentiment.py`. **Verdict: REJECT — sentiment is noise within permutation tolerance.** Median ΔIC=+0.0809, permutation p-value=0.8260 (one-sided, n_perm=1000). Per-fold IC is very noisy (range -1.00 to +0.72) because the v2 training set is only **111 rows after sentiment-NaN drop** (vs v1's 693 rows — 84% row loss from sparse coverage), which limits how many cutoffs can train (64 v2 models vs 472 v1) and how many test folds the ablation can evaluate (6 folds vs the theoretical ~50). The v2 harness corroborates: baseline 0.9541 vs meta winner `n200_d3_lr10 @ 0.5` median Sharpe 0.9476 (meta *underperforms* by -0.7%, vs v1's +29% meta win). The realized cause is exactly Spec §7's "sparse news per ETF" risk: sector ETFs (not individual stocks) attract limited per-ticker coverage. Future paths if revisited as Stage 6.5: (a) aggregate constituent-stock news per sector ETF (much denser); (b) FinBERT restoration when HF Hub is reachable (may sharpen the signal but won't fix sparsity); (c) accept that sector-rotation sentiment doesn't add to a meta-labeling overlay on top of price momentum.
+- [ ] Stages 7–8 — see design spec
 
 ## Setup
 
@@ -102,6 +107,28 @@ Wires `MomentumTopNStrategy` into Nautilus's `TradingNode` runtime via livesim's
 
 Stage-4.5 and its 2026-05-27 follow-up closed the real-catalog parity gap (was ~29%, now drift=0.000000 over the 2-year regression window; full-catalog run completes without overdraft). See the Stage 4 status entry above for the four root causes (risk-engine throttle, fill-bar semantic, `_on_bar`/`_submit_order` ordering on the msgbus, and the strategy's stale-close decision-time references). The regression test `tests/test_live_sim_parity_real_catalog.py` widened its window to 2021→2023 to cover the 2022-10-03 rebalance that exposed cause 4 and gates real-catalog drift at 2%.
 
+### Sentiment ablation (Stage 6)
+
+```bash
+# 1. Ingest news from Alpaca free-tier (~5 min for full 2020-07 -> today)
+uv run python data/ingest_alpaca_news.py
+uv run python data/ingest_alpaca_news.py --since 2024-01-01    # incremental
+
+# 2. Score with VADER (~1 sec; FinBERT swap-in is a drop-in change in nlp/sentiment.py)
+uv run python examples/score_news.py
+uv run python examples/score_news.py --smoke                    # ~100 headlines
+
+# 3. Train v2 model grid (price + sentiment features)
+uv run python examples/train_meta_models.py --features-version v2
+
+# 4. Harness eval on v2 (for the baseline-vs-meta comparison)
+uv run python examples/run_harness_meta.py --features-version v2
+
+# 5. Ablation verdict — does sentiment add signal?
+uv run python examples/ablate_sentiment.py
+```
+Writes `summary.md` + `per_fold.csv` to `results/sentiment_ablation_<timestamp>/`. The current verdict is **REJECT** (sentiment is noise within permutation tolerance); see Stage 6 status entry above for the honest interpretation.
+
 ### Meta-labeling (Stage 5)
 
 ```bash
@@ -120,11 +147,13 @@ Writes `baseline.csv`, `meta.csv`, `summary.json`, `summary.md` to `results/harn
 
 ```
 data/         pipeline modules + the ParquetDataCatalog (catalog gitignored)
+              + Stage-6 news shards under data/news/<ticker>/<YYYY-MM>.parquet (gitignored)
 strategies/   Nautilus Strategy implementations + venue/FillModel helper
 analysis/     honesty-harness modules (runner, walk_forward, costs, DSR, tearsheet)
 livesim/      Stage-4 TradingNode wiring — CatalogLiveDataClient, SimulatedLiveExecutionClient, factories, node_config
-models/       Stage-5 ML pipeline — labeling, features, CV, trainer, dated ModelStore (cache/ gitignored)
-examples/     runnable demos (smoke, momentum, harness, run_trading_node, train_meta_models, run_harness_meta)
+models/       Stage-5 ML pipeline — labeling, features, CV, trainer, dated ModelStore (cache/ gitignored; cache_v2/ for v2 price+sentiment models)
+nlp/          Stage-6 NLP — VADER (FinBERT-ready) scorer + persistent SentimentStore (cache/ gitignored)
+examples/     runnable demos (smoke, momentum, harness, run_trading_node, train_meta_models, run_harness_meta, ingest news, score_news, ablate_sentiment)
 scripts/      one-off scripts (yfinance cross-check)
 tests/        pytest suite
 docs/         design spec, plans, Nautilus API notes

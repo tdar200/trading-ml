@@ -37,7 +37,8 @@ from strategies.momentum_meta import MomentumMetaConfig, MomentumMetaStrategy
 
 
 CATALOG_PATH = _PROJECT_ROOT / "data" / "catalog"
-CACHE_DIR = _PROJECT_ROOT / "models" / "cache"
+CACHE_DIR_V1 = _PROJECT_ROOT / "models" / "cache"
+CACHE_DIR_V2 = _PROJECT_ROOT / "models" / "cache_v2"
 RESULTS_ROOT = _PROJECT_ROOT / "results"
 
 
@@ -61,9 +62,12 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--smoke", action="store_true",
                         help="2 meta combos × 2 windows (~seconds).")
+    parser.add_argument("--features-version", choices=("v1", "v2"), default="v1",
+                        help="v1: models/cache (Stage 5); v2: models/cache_v2 (Stage 6 sentiment).")
     args = parser.parse_args()
 
     n_windows = 2 if args.smoke else 5
+    cache_dir = CACHE_DIR_V2 if args.features_version == "v2" else CACHE_DIR_V1
 
     catalog = ParquetDataCatalog(path=str(CATALOG_PATH.resolve()))
     bars_by_ticker = {t: catalog.bars(instrument_ids=[f"{t}.{VENUE_MIC}"]) for t in ALL_TICKERS}
@@ -74,16 +78,16 @@ def main() -> int:
 
     # Pre-flight: without trained models the meta strategy silently falls
     # back to baseline on every rebalance, producing a meaningless verdict.
-    if not any(CACHE_DIR.glob("*.joblib")):
-        print(f"WARNING: {CACHE_DIR} contains no model artifacts. "
-              f"Run examples/train_meta_models.py first, otherwise meta "
-              f"will fall back to baseline on every rebalance and the "
-              f"DSR comparison is meaningless.")
+    if not any(cache_dir.glob("*.joblib")):
+        print(f"WARNING: {cache_dir} contains no model artifacts. "
+              f"Run examples/train_meta_models.py --features-version {args.features_version} "
+              f"first, otherwise meta will fall back to baseline on every "
+              f"rebalance and the DSR comparison is meaningless.")
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out_dir = RESULTS_ROOT / f"harness_meta_{timestamp}"
+    out_dir = RESULTS_ROOT / f"harness_meta_{args.features_version}_{timestamp}"
     out_dir.mkdir(parents=True, exist_ok=True)
-    print(f"output: {out_dir}")
+    print(f"output: {out_dir} ({args.features_version})")
 
     windows = _build_windows(bars_by_ticker, n_windows=n_windows)
     print(f"windows: {len(windows)}")
@@ -124,8 +128,13 @@ def main() -> int:
     meta_base = dict(
         universe=UNIVERSE, benchmark=BENCHMARK,
         top_n=2, lookback_days=63, skip_days=0,
-        model_store_path=str(CACHE_DIR),
+        model_store_path=str(cache_dir),
     )
+    if args.features_version == "v2":
+        # v2 models expect 3 sentiment features at inference time; wire the
+        # strategy to read from the same SentimentStore the trainer wrote to.
+        meta_base["news_provider_path"] = str(_PROJECT_ROOT / "nlp" / "cache")
+        meta_base["news_provider_label"] = "finbert-v1"
     meta_df = walk_forward(
         strategy_class=MomentumMetaStrategy,
         config_class=MomentumMetaConfig,
@@ -185,7 +194,7 @@ def main() -> int:
     meta_beats = meta_winner_median > baseline_median
     verdict = meta_beats and dsr["p_value"] > 0.95
 
-    md = f"""# Stage-5 Meta-Labeling Harness — {timestamp}
+    md = f"""# Stage-5 Meta-Labeling Harness ({args.features_version.upper()}) — {timestamp}
 
 ## Baseline (Stage-3 winner: top_n=2, lookback=63, skip=0)
 - median window Sharpe: **{baseline_median:.4f}**

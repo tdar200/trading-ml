@@ -26,14 +26,18 @@ from nautilus_trader.persistence.catalog.parquet import ParquetDataCatalog
 
 from data.instruments import VENUE_MIC
 from data.tickers import ALL_TICKERS, BENCHMARK, UNIVERSE
-from models.features import FEATURE_COLUMNS, make_features
+from models.features import FEATURE_COLUMNS, SENTIMENT_FEATURE_COLUMNS, make_features
 from models.labeling import make_labels
 from models.store import ModelStore
 from models.trainer import fit
 
 
 CATALOG_PATH = _PROJECT_ROOT / "data" / "catalog"
-CACHE_DIR = _PROJECT_ROOT / "models" / "cache"
+CACHE_DIR_V1 = _PROJECT_ROOT / "models" / "cache"
+CACHE_DIR_V2 = _PROJECT_ROOT / "models" / "cache_v2"
+CACHE_DIR = CACHE_DIR_V1  # default — used when --cache-dir not overridden and --features-version v1
+SENTIMENT_CACHE = _PROJECT_ROOT / "nlp" / "cache"
+SENTIMENT_MODEL_VERSION = "finbert-v1"
 
 
 # Hyperparameter grid (matches spec §4.9). Defines 8 LightGBM combos.
@@ -94,11 +98,29 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--smoke", action="store_true",
                         help="Train 1 hyperparameter combo on the first 3 cutoffs only (~seconds).")
-    parser.add_argument("--cache-dir", default=str(CACHE_DIR))
+    parser.add_argument("--cache-dir", default=None,
+                        help="Override the cache dir. Default: models/cache (v1) or models/cache_v2 (v2).")
+    parser.add_argument("--features-version", choices=("v1", "v2"), default="v1",
+                        help="v1: 11 price features (Stage 5); v2: 11 price + 3 sentiment features (Stage 6).")
     args = parser.parse_args()
 
-    cache_dir = Path(args.cache_dir)
+    # Default cache dir tracks the features version unless explicitly overridden.
+    if args.cache_dir:
+        cache_dir = Path(args.cache_dir)
+    else:
+        cache_dir = CACHE_DIR_V2 if args.features_version == "v2" else CACHE_DIR_V1
     cache_dir.mkdir(parents=True, exist_ok=True)
+
+    news_provider = None
+    feature_cols = list(FEATURE_COLUMNS)
+    if args.features_version == "v2":
+        from nlp.sentiment_store import SentimentStore
+        news_provider = SentimentStore(
+            cache_dir=SENTIMENT_CACHE, model_version=SENTIMENT_MODEL_VERSION,
+        )
+        feature_cols = list(FEATURE_COLUMNS) + list(SENTIMENT_FEATURE_COLUMNS)
+        print(f"v2 mode: using {len(feature_cols)} features (price + sentiment)")
+
     grid = SMOKE_GRID if args.smoke else DEFAULT_GRID
 
     print(f"loading catalog from {CATALOG_PATH}...")
@@ -126,12 +148,15 @@ def main() -> int:
         t: list(all_rebalance_dates[all_rebalance_dates.isin(bars_by_ticker[t].index)])
         for t in UNIVERSE
     }
-    features = make_features(bars_by_ticker, dates_per_ticker, benchmark=BENCHMARK)
-    print(f"features generated: {len(features)} rows × {len(FEATURE_COLUMNS)} columns")
+    features = make_features(
+        bars_by_ticker, dates_per_ticker, benchmark=BENCHMARK,
+        news_provider=news_provider,
+    )
+    print(f"features generated: {len(features)} rows × {len(feature_cols)} columns")
 
     # 4. Join labels + features on (ticker, date).
     dataset = features.merge(labels, on=["ticker", "date"], how="inner")
-    dataset = dataset.dropna(subset=list(FEATURE_COLUMNS) + ["label"]).reset_index(drop=True)
+    dataset = dataset.dropna(subset=feature_cols + ["label"]).reset_index(drop=True)
     print(f"training dataset: {len(dataset)} rows after join + dropna")
     if dataset.empty:
         print("ERROR: empty training dataset — check catalog has enough history")
@@ -160,7 +185,7 @@ def main() -> int:
             if len(train) < 50:
                 # Not enough training data yet; skip this cutoff.
                 continue
-            X_train = train[list(FEATURE_COLUMNS)]
+            X_train = train[feature_cols]
             y_train = train["label"].to_numpy()
             model = fit(
                 X_train, y_train,
@@ -168,7 +193,7 @@ def main() -> int:
                 max_depth=combo["max_depth"],
                 learning_rate=combo["learning_rate"],
             )
-            store.save(cutoff, model, feature_names=list(FEATURE_COLUMNS))
+            store.save(cutoff, model, feature_names=feature_cols)
             total_models += 1
     print(f"done: {total_models} models saved under {cache_dir}/")
     if total_models == 0:

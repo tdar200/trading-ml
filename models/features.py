@@ -74,9 +74,16 @@ def extract_features_for_date(
     ticker: str,
     date: pd.Timestamp,
     benchmark: str = "SPY",
+    news_provider=None,
 ) -> dict[str, float]:
     """Compute features for a single (ticker, date). Returns dict; values may be NaN
-    when there's insufficient history (caller decides whether to drop)."""
+    when there's insufficient history (caller decides whether to drop).
+
+    Stage-6: if `news_provider` is given (something exposing
+    ``get_scored(ticker, *, start, end) -> DataFrame[..., score]``), three
+    sentiment features are appended via a strict-before half-open window.
+    When `news_provider` is None the sentiment keys are absent (Stage-5
+    behavior preserved)."""
     closes = bars_by_ticker.get(ticker)
     spy = bars_by_ticker.get(benchmark)
     if closes is None or spy is None:
@@ -115,7 +122,7 @@ def extract_features_for_date(
     month_sin = math.sin(2.0 * math.pi * month / 12.0)
     month_cos = math.cos(2.0 * math.pi * month / 12.0)
 
-    return {
+    out = {
         "mom_6m": mom_6m,
         "mom_1m": mom_1m,
         "mom_3m_skip_1m": mom_3m_skip_1m,
@@ -129,22 +136,50 @@ def extract_features_for_date(
         "month_cos": month_cos,
     }
 
+    # Stage-6 sentiment features (only when news_provider supplied).
+    # Half-open window [date - N days, date) — strictly-before guarantee.
+    if news_provider is not None:
+        end_ts = pd.Timestamp(date)
+        if end_ts.tz is None:
+            end_ts = end_ts.tz_localize("UTC")
+        win7_start = end_ts - pd.Timedelta(days=7)
+        win30_start = end_ts - pd.Timedelta(days=30)
+        df7 = news_provider.get_scored(ticker, start=win7_start, end=end_ts)
+        df30 = news_provider.get_scored(ticker, start=win30_start, end=end_ts)
+        out["sentiment_7d_mean"] = (
+            float(df7["score"].mean()) if not df7.empty else float("nan")
+        )
+        out["sentiment_7d_count"] = (
+            float(len(df7)) if not df7.empty else float("nan")
+        )
+        out["sentiment_30d_mean"] = (
+            float(df30["score"].mean()) if not df30.empty else float("nan")
+        )
+
+    return out
+
 
 def make_features(
     bars_by_ticker: dict[str, pd.Series],
     dates_per_ticker: dict[str, list[pd.Timestamp]],
     *,
     benchmark: str = "SPY",
+    news_provider=None,
 ) -> pd.DataFrame:
     """Batch entry: build a feature matrix for the given (ticker, date) pairs.
 
     Rows whose features cannot all be computed (insufficient history) are dropped.
+
+    Stage-6: pass `news_provider` to additionally compute sentiment features.
+    Rows missing sentiment (no news in window) are dropped along with rows
+    missing price features — same NaN-skip semantics.
     """
     rows: list[dict] = []
     for ticker, dates in dates_per_ticker.items():
         for date in dates:
             feats = extract_features_for_date(
-                bars_by_ticker, ticker=ticker, date=date, benchmark=benchmark
+                bars_by_ticker, ticker=ticker, date=date, benchmark=benchmark,
+                news_provider=news_provider,
             )
             if not feats:
                 continue
@@ -160,4 +195,8 @@ FEATURE_COLUMNS: tuple[str, ...] = (
     "rank_mom_6m", "rank_vol_60d",
     "spy_mom_6m", "spy_vol_60d",
     "month_sin", "month_cos",
+)
+
+SENTIMENT_FEATURE_COLUMNS: tuple[str, ...] = (
+    "sentiment_7d_mean", "sentiment_7d_count", "sentiment_30d_mean",
 )
