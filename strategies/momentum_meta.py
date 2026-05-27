@@ -99,7 +99,12 @@ class MomentumMetaStrategy(MomentumTopNStrategy):
 
         # 3. Compute per-ticker target USD via filter+sizer.
         target_usd_by_ticker: dict[str, float] = {}
-        rebalance_date = pd.Timestamp(now_ts_ns, unit="ns", tz="UTC").tz_convert(None)
+        # Normalize to midnight so it aligns with the synthetic business-day
+        # index in _bars_to_series_dict (which uses freq="B" → midnight-aligned).
+        # Real catalog bars have ts_event at NYSE close (e.g. 04:00 UTC); without
+        # this normalization, extract_features_for_date's index.get_loc raises
+        # KeyError on every real bar and the meta strategy silently stops trading.
+        rebalance_date = pd.Timestamp(now_ts_ns, unit="ns", tz="UTC").tz_convert(None).normalize()
 
         # Load a model for this date; None → baseline behaviour.
         model_payload = None

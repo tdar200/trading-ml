@@ -219,3 +219,65 @@ def test_no_model_falls_back_to_baseline(tmp_path: Path):
     held = _held_count(strat, engine, universe)
     # No model available → baseline behavior → hold top-3.
     assert held == 3
+
+
+def test_non_midnight_timestamps_still_trade(tmp_path: Path):
+    """Real catalog bars have ts_event at NYSE close (non-midnight UTC). The
+    strategy must still extract features and trade — regression test for the
+    timestamp-normalization bug found in Stage-5 final review."""
+    n = 380
+    closes = {
+        "A": _grow(0.0020, n), "B": _grow(0.0015, n),
+        "C": _grow(0.0010, n), "D": _grow(0.0005, n), "E": _grow(0.0000, n),
+    }
+
+    # NYSE close ≈ 21:00 EST = 02:00 UTC (winter). Pick 04:00 UTC for clear
+    # non-midnight alignment.
+    start_ts_ns = 1_577_851_200_000_000_000  # 2020-01-01 04:00:00 UTC
+
+    cache_dir = _write_stub_store(
+        tmp_path, label="default", cutoff=pd.Timestamp("2020-01-01"),
+        feature_names=[
+            "mom_6m", "mom_1m", "mom_3m_skip_1m",
+            "vol_20d", "vol_60d",
+            "rank_mom_6m", "rank_vol_60d",
+            "spy_mom_6m", "spy_vol_60d",
+            "month_sin", "month_cos",
+        ],
+        p_win=1.0,  # always confident
+    )
+
+    config = BacktestEngineConfig(
+        trader_id=TraderId("META-TEST-003"),
+        logging=LoggingConfig(log_level="WARNING"),
+    )
+    engine = BacktestEngine(config=config)
+    venue = Venue(VENUE_MIC)
+    engine.add_venue(
+        venue=venue, oms_type=OmsType.NETTING, account_type=AccountType.CASH,
+        base_currency=USD, starting_balances=[Money(100_000, USD)],
+        fill_model=FillModel(prob_fill_on_limit=1.0, prob_slippage=0.0, random_seed=42),
+    )
+    universe = tuple(closes.keys())
+    for t in universe:
+        engine.add_instrument(_instrument(t))
+        engine.add_data(_bars(t, closes[t], start_ts_ns))
+    engine.add_instrument(_instrument("BENCH"))
+    engine.add_data(_bars("BENCH", [200.0] * n, start_ts_ns))
+
+    strat = MomentumMetaStrategy(config=MomentumMetaConfig(
+        universe=universe, benchmark="BENCH",
+        top_n=3, lookback_days=63, skip_days=0,
+        model_store_path=str(cache_dir),
+        model_store_label="default",
+        filter_threshold=0.0,  # don't filter — exercise the model path
+    ))
+    engine.add_strategy(strat)
+    engine.run()
+
+    held = _held_count(strat, engine, universe)
+    # With p_win=1.0 and threshold=0.0, the meta strategy should trade
+    # exactly like the baseline (top-3). If it doesn't, the model path is
+    # silently failing (likely a timestamp-alignment bug like the one
+    # found in Stage-5 final review).
+    assert held == 3, f"meta strategy not trading on non-midnight timestamps; held={held}"
