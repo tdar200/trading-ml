@@ -27,7 +27,11 @@ for the full design, philosophy, and staged roadmap.
   - [x] Runnable: `uv run python examples/run_trading_node.py --fast-replay` (one-shot) or `--poll-seconds N` (continuous).
   - [x] **Integration parity (synthetic, top_n=1)**: 0.38% drift vs `BacktestEngine` — well under the 1% gate. Runtime infrastructure validated end-to-end (tests/test_live_sim_integration.py).
   - [ ] **Real-catalog parity (top_n=3): KNOWN GAP.** Full 17k-bar catalog fast-replay produces final equity ≈$170k vs Stage-3 backtest's ≈$239k at the same slippage=0 — about 29% drift. Likely cause: async event ordering with cross-ticker rotations at top_n>1, which the synthetic test (top_n=1) doesn't surface. The TradingNode loop runs cleanly; the strategy makes credible trades; but parity with `BacktestEngine` on real data is not yet established. Stage-4.5 follow-up.
-- [ ] Stages 5–8 — see design spec
+- [x] Stage 5 — Meta-labeling ML overlay
+  - [x] Pure pipeline: `models/{labeling,features,cv,trainer,store}.py` (holding-period-return-sign labels, 11 no-lookahead features, purged+embargoed walk-forward CV, LightGBM fit/predict, dated joblib ModelStore) + `strategies/momentum_meta.py` (Stage-2 subclass with filter+sizer: `weight = base × (p_win - threshold)/(1 - threshold)` when `p_win ≥ threshold`, else 0).
+  - [x] Walk-forward train: `uv run python examples/train_meta_models.py` — 8 LightGBM combos (n_estimators × max_depth × learning_rate cross-product) × 60 monthly cutoffs each = **472 saved models** (8 cutoffs skipped by the warm-up gate). Smoke mode (`--smoke`) trains 1 combo × ≤3 cutoffs in ~3 sec.
+  - [x] Harness eval: `uv run python examples/run_harness_meta.py` — Stage-3 harness for baseline (Stage-2 winner) + 24-combo meta grid (8 LightGBM × 3 thresholds) × 5 windows = 5 + 120 runs. **Baseline median window Sharpe 1.0162 vs meta winner `n100_d3_lr05` @ threshold 0.5 with median window Sharpe 1.0223 (+0.6%, very small effect)**. Deflated Sharpe over the 125 (combo × window) trials: p=1.0000, z=9.26. Verdict: meta clearly beats baseline OOS+DSR per the headline math, **but the +0.006 Sharpe edge is small and the DSR formulation treats each (combo, window) as a separate trial** — a more conservative formulation using only the 25 per-combo-median Sharpes would shrink n_trials and the apparent significance. Honest read: meta neither failed nor produced a clear edge.
+- [ ] Stages 6–8 — see design spec
 
 ## Setup
 
@@ -95,6 +99,20 @@ Wires `MomentumTopNStrategy` into Nautilus's `TradingNode` runtime via livesim's
 
 ⚠️ **Known gap (Stage 4.5):** real-catalog fast-replay differs from `BacktestEngine` by ~29% at the same slippage. The synthetic integration test (top_n=1) achieves 0.38% drift; the real catalog with top_n=3 surfaces an async event-ordering issue around cross-ticker rotation days that is not yet fully resolved.
 
+### Meta-labeling (Stage 5)
+
+```bash
+# 1. Walk-forward train the LightGBM meta-model grid (~30 sec; --smoke ≈3 sec)
+uv run python examples/train_meta_models.py
+uv run python examples/train_meta_models.py --smoke    # 1 combo × 3 cutoffs
+
+# 2. Evaluate baseline (Stage-2) vs meta through the Stage-3 harness (~2 min; --smoke ≈7 sec)
+uv run python examples/run_harness_meta.py
+uv run python examples/run_harness_meta.py --smoke     # 1 combo × 2 windows
+```
+
+Writes `baseline.csv`, `meta.csv`, `summary.json`, `summary.md` to `results/harness_meta_<timestamp>/`. The summary contains the per-combo median Sharpe ranking, Deflated Sharpe over the trial set, and an honest YES/NO verdict on whether meta beat baseline OOS + DSR.
+
 ## Layout
 
 ```
@@ -102,7 +120,8 @@ data/         pipeline modules + the ParquetDataCatalog (catalog gitignored)
 strategies/   Nautilus Strategy implementations + venue/FillModel helper
 analysis/     honesty-harness modules (runner, walk_forward, costs, DSR, tearsheet)
 livesim/      Stage-4 TradingNode wiring — CatalogLiveDataClient, SimulatedLiveExecutionClient, factories, node_config
-examples/     runnable demos (smoke backtest, momentum backtest, harness, run_trading_node)
+models/       Stage-5 ML pipeline — labeling, features, CV, trainer, dated ModelStore (cache/ gitignored)
+examples/     runnable demos (smoke, momentum, harness, run_trading_node, train_meta_models, run_harness_meta)
 scripts/      one-off scripts (yfinance cross-check)
 tests/        pytest suite
 docs/         design spec, plans, Nautilus API notes
