@@ -400,6 +400,90 @@ Stage 9.A' was 1.5 days. Adding the Backtest Lab tab as described:
 
 That's the full vision. The pieces all exist; we're gluing.
 
+## 10. Deep scan addendum (SearXNG + crawl4ai pipeline, 2026-05-27)
+
+A second pass using both Docker services (SearXNG on `:8888` for URL discovery, crawl4ai on `:11235` for clean-markdown extraction) surfaced two materially-significant additions and corroborated everything else.
+
+### 10.1 The new winner for the Streamlit chart layer
+
+`lightweight-charts-python` (louisnw01, 2k⭐) — earlier recommendation — **spawns its own window** via PyWebView / Qt embedding. It works *with* Streamlit but isn't a Streamlit component.
+
+**[`streamlit-lightweight-charts-pro`](https://github.com/nandkapadia/streamlit-lightweight-charts-pro)** (nandkapadia, 18⭐, v0.1.8 Nov 2025) — newer, lower-star, but it's a **proper Streamlit custom component**. Renders inline as part of the Streamlit page via the bi-directional `components.declare_component(...)` system. 450+ unit tests, 95%+ coverage. Key features for us:
+
+- Candlestick, line, area, bar, histogram, baseline charts via fluent API
+- **Multi-pane synchronized charts** (price + volume + indicators stacked)
+- **Trade visualization built-in** — markers + annotations for entry/exit
+- **Range switchers** — 1D / 1W / 1M / 3M / 6M / 1Y / ALL buttons
+- **Auto-sizing** responsive to Streamlit container width
+- DataFrame → chart data integration native
+- Pre-built price+volume combination component (`PriceVolumeChart`)
+
+**Pattern**:
+
+```python
+import streamlit as st
+from streamlit_lightweight_charts_pro import renderChart
+import pandas as pd
+
+# OHLCV DataFrame from data_sources
+df = data_sources.load_candles("XLK", "1d", "2024-01-01", "2026-05-27")
+
+renderChart(
+    charts=[
+        {"type": "candlestick", "data": df_to_lwc(df), "options": {"upColor": "#26a69a"}},
+        {"type": "histogram", "data": df_to_volume_lwc(df), "options": {"priceScaleId": "volume"}},
+    ],
+    layout={"textColor": "white", "background": {"type": "solid", "color": "#1e1e1e"}},
+)
+```
+
+This is the **right** chart engine for Stage 9.A'. Drops cleanly into `dashboard/views/equity.py` next to (or replacing) `st.line_chart`.
+
+**Updated recommendation**: Stage 9.A' uses `streamlit-lightweight-charts-pro`, not `lightweight-charts-python`. Both wrap the same TradingView JS library; the former is the Streamlit-native one.
+
+### 10.2 The bookmark: `best-of-algorithmic-trading`
+
+**[PlaceNL2026/best-of-algorithmic-trading](https://github.com/PlaceNL2026/best-of-algorithmic-trading)** — 286⭐, 109 curated projects across 7 categories with automated quality scores. Maintained on a regular schedule. Worth bookmarking for future research. Surfaces several projects worth knowing about even if we don't use them today:
+
+| Project | ⭐ | What it is | Relevance to us |
+|---|---|---|---|
+| [QuantConnect Lean](https://github.com/QuantConnect/Lean) | 18k 🥈 | Python/C# algorithmic trading engine | Competitor to Nautilus, ships its own QuantConnect Cloud UI; uninteresting since we picked Nautilus |
+| [hummingbot](https://github.com/hummingbot/hummingbot) | 18k 🥇 | Open-source market making + algo trading platform | Crypto-focused, ships its own UI; cross-asset transfer is non-trivial |
+| [OctoBot](https://github.com/Drakkar-Software/OctoBot) | 5.5k 🥈 | AI / grid / DCA crypto bot | Web UI included; crypto-focused |
+| [hftbacktest](https://github.com/nkaz001/hftbacktest) | 3.9k 🥈 ➕ | HFT backtester (Rust + Python) | Out of scope (daily bars), useful reference if we ever go intraday |
+| [gs-quant](https://github.com/goldmansachs/gs-quant) | 10k 🥈 ➕ | Goldman Sachs Python quant toolkit | Mostly derivatives / risk; tangential to our momentum-on-ETF research |
+| [fast-trade](https://github.com/jrmeier/fast-trade) | 540 🥉 | Low-code pandas-based backtester | Cute, much narrower than VectorBT |
+| [ta-lib-python](https://github.com/TA-Lib/ta-lib-python) | 12k 🥇 | Python wrapper for TA-Lib | Standard indicator library, drop-in for any of our feature work |
+
+**Take**: this is the canonical curated list. If we ever need to widen the search again, start here rather than re-running SearXNG queries.
+
+### 10.3 Other corroboration from the scan
+
+- **Optuna ecosystem confirmed mature**: [official docs](https://optuna.readthedocs.io/) + [HuggingFace cookbook](https://huggingface.co/learn/cookbook/en/optuna_hpo_with_transformers) show Optuna is the de-facto Python HPO library; integrating into our walk-forward harness is a well-trodden pattern.
+- **Nautilus version**: per a [Groundy production-grade guide](https://groundy.com/articles/nautilustrader-building-production-ready-algorithmic/), Nautilus 1.227.0 Beta (released 2026-05-18) is the latest stable tag — the version we've been on the whole project. PyO3 migration from Cython has been underway since 2024 (still in progress).
+- **Streamlit forum confirms**: real-time candlestick rendering in Streamlit *requires* a custom component because vanilla `st.line_chart` re-runs the script on every interaction. [Forum discussion](https://discuss.streamlit.io/t/how-can-i-create-a-real-time-candlestick-bar-chart-using-the-lightweight-charts-library-by-tradingview/66246) is essentially "use one of the lightweight-charts wrappers" — the same conclusion as §10.1.
+
+### 10.4 Final consolidated recommendation
+
+**Stage 9 = Stage 9.A'' (revised)**:
+
+1. **Chart engine**: `streamlit-lightweight-charts-pro` (Streamlit-native component) — replaces `lightweight-charts-python` from §7. Same TradingView JS underneath; better Streamlit integration.
+2. **Backtest Lab** (§9): strategy auto-discovery + Pydantic-introspected param form + 3 modes (single / grid / Optuna), all sharing the existing `analysis.walk_forward.walk_forward` engine.
+3. **Optuna mode**: launches `optuna-dashboard` in a separate tab for rich hyperparameter visualization (parallel coords, importance, contour). Don't reimplement what's already free.
+4. **Live Equity tab** (new, optional): subscribe to bars from a running TradingNode (poll the catalog as Stage 4 does), `chart.update(bar)` per tick. Maybe Stage 9.5; not blocking.
+5. **Existing 5 tabs preserved**: Equity (upgraded charts), Harness Verdicts, Sentiment, Models, Journal.
+
+Total revised effort: **~2.5 days** (same as before — the swap from louisnw01 → nandkapadia is API-shape change inside `dashboard/views/equity.py`, not net new work).
+
+### 10.5 Future-research bookmarks
+
+If we ever revisit dashboard / strategy-tester architecture:
+- **[`best-of-algorithmic-trading`](https://github.com/PlaceNL2026/best-of-algorithmic-trading)** — start here, not Google.
+- **[`optuna-dashboard`](https://github.com/optuna/optuna-dashboard)** — the free hyperparameter UI we'd already be using by then.
+- **[Black101081/Nautilus-Web-Interface](https://github.com/Black101081/Nautilus-Web-Interface)** — if we ever outgrow Streamlit and need full FastAPI+React.
+- **[FreqUI](https://github.com/freqtrade/frequi)** — Vue.js reference for production-grade trader UX.
+- **[VectorBT](https://github.com/polakowo/vectorbt)** — alternative backtest engine if Nautilus's events-per-bar model ever feels slow for sweep work.
+
 ## Sources
 
 Crawled via crawl4ai at `http://localhost:11235/md`:
