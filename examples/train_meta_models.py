@@ -171,6 +171,9 @@ def main() -> int:
             store.save(cutoff, model, feature_names=list(FEATURE_COLUMNS))
             total_models += 1
     print(f"done: {total_models} models saved under {cache_dir}/")
+    if total_models == 0:
+        print("ERROR: no models trained — every cutoff had <50 training rows")
+        return 1
     return 0
 
 
