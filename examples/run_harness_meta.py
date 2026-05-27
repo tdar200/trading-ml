@@ -142,6 +142,16 @@ def main() -> int:
               "Check models/cache/ has artifacts and that the harness "
               "didn't filter out every window.")
         return 1
+
+    # Sanity: if every (window, combo) has the same Sharpe regardless of threshold,
+    # the model path almost certainly degenerated (e.g. feature extraction failing).
+    # This would silently produce a degenerate "winner" via idxmax tie-breaking.
+    groups = meta_df.groupby(["window_idx", "model_store_label"])["sharpe"]
+    if (groups.nunique() == 1).all() and meta_df["filter_threshold"].nunique() > 1:
+        print("ERROR: all filter thresholds produced identical Sharpes within each "
+              "(window, model_store_label) group. The model path likely degenerated — "
+              "check strategy timestamp / feature alignment.")
+        return 1
     print(f"  meta runs: {len(meta_df)}; max median Sharpe: "
           f"{meta_df.groupby(['model_store_label', 'filter_threshold'])['sharpe'].median().max():.4f}")
 
