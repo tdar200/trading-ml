@@ -130,6 +130,11 @@ def main() -> int:
         top_n=2, lookback_days=63, skip_days=0,
         model_store_path=str(cache_dir),
     )
+    if args.features_version == "v2":
+        # v2 models expect 3 sentiment features at inference time; wire the
+        # strategy to read from the same SentimentStore the trainer wrote to.
+        meta_base["news_provider_path"] = str(_PROJECT_ROOT / "nlp" / "cache")
+        meta_base["news_provider_label"] = "finbert-v1"
     meta_df = walk_forward(
         strategy_class=MomentumMetaStrategy,
         config_class=MomentumMetaConfig,

@@ -17,6 +17,7 @@ dependencies = [
     "joblib>=1.4",
     "torch>=2.2",
     "transformers>=4.40",
+    "vadersentiment>=3.3.2",
 ]
 
 [dependency-groups]

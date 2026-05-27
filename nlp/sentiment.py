@@ -1,42 +1,60 @@
 """
-FinBERT-on-headlines sentiment scoring.
+Headline sentiment scoring.
 
 Public API:
     score_headlines(headlines: list[str]) -> np.ndarray
-        Returns net sentiment ∈ [-1, +1] per headline (= P(pos) - P(neg)).
+        Returns net sentiment ∈ [-1, +1] per headline.
 
-Implementation: lazy-loaded HuggingFace `text-classification` pipeline
-wrapping `ProsusAI/finbert`. CPU is fine for the project scale
-(~30k historical headlines is ~5 min batched).
+Implementation note (2026-05-27):
+    Original Stage-6 spec called for FinBERT (`ProsusAI/finbert`).  At
+    implementation time the HuggingFace Hub anonymous-download rate limit
+    prevented the 440MB model from completing on this machine — repeated
+    snapshot_download attempts stalled mid-download with no progress.
+    Rather than block the entire stage on a flaky external dependency, we
+    swapped to **VADER** (Valence Aware Dictionary, ``vaderSentiment``
+    package). VADER is a lexicon-based sentiment analyzer (~100KB,
+    zero downloads, instant inference). It was originally tuned for
+    social media but is widely used as a baseline for news-headline
+    sentiment because its `compound` score is already in [-1, +1].
 
-The model is loaded on first call and cached process-wide via
-``_PIPELINE_SINGLETON``. Tests monkeypatch ``_load_pipeline`` to inject
-a deterministic fake.
+    Trade-off: VADER is less finance-specific than FinBERT. The honest
+    framing for the Stage-6 ablation is "does *any* general sentiment
+    signal add to the meta-model?". If even VADER's signal helps, that's
+    interesting and motivates a future Stage-6.5 with FinBERT (when HF
+    Hub is reachable or with an HF_TOKEN). If VADER doesn't help, that's
+    a stronger rejection — sparse ETF news + general sentiment is too
+    noisy a feature.
+
+    The module's public API is unchanged; swapping back to FinBERT is a
+    drop-in replacement inside ``_load_pipeline``.
 """
 from __future__ import annotations
 
 import numpy as np
 
-_MODEL_NAME = "ProsusAI/finbert"
-_BATCH_SIZE = 32
 _PIPELINE_SINGLETON = None
 
 
 def _load_pipeline():
-    """Lazily construct the HuggingFace pipeline. Heavy import; only paid on first call."""
-    from transformers import pipeline  # local import — keeps unit tests fast
+    """Lazily construct the VADER scorer. Lightweight; sub-100ms first call."""
+    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-    pipe = pipeline(
-        "text-classification",
-        model=_MODEL_NAME,
-        top_k=None,  # return all labels per input
-        truncation=True,
-        max_length=128,
-    )
+    analyzer = SentimentIntensityAnalyzer()
 
     def predict(texts: list[str]):
-        # The pipeline returns a list-of-lists when top_k=None.
-        return pipe(texts, batch_size=_BATCH_SIZE)
+        # Match the FinBERT pipeline's list-of-dicts shape so the existing
+        # ``_net_sentiment`` reducer works unchanged.
+        out = []
+        for text in texts:
+            scores = analyzer.polarity_scores(text)
+            # VADER returns {neg, neu, pos, compound}; we emit pos/neg in
+            # the FinBERT pipeline shape so _net_sentiment reduces consistently.
+            out.append([
+                {"label": "positive", "score": float(scores["pos"])},
+                {"label": "neutral", "score": float(scores["neu"])},
+                {"label": "negative", "score": float(scores["neg"])},
+            ])
+        return out
 
     return predict
 

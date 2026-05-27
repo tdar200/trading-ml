@@ -46,14 +46,20 @@ _MIN_FEATURE_HISTORY = 130
 
 
 class MomentumMetaConfig(MomentumTopNConfig, frozen=True):
-    """Config = Stage-2 MomentumTopNConfig fields + Stage-5 model parameters."""
+    """Config = Stage-2 MomentumTopNConfig fields + Stage-5/6 model parameters."""
     model_store_path: str = ""          # filesystem path to ModelStore cache_dir
     model_store_label: str = "default"  # ModelStore label (one per hyperparam combo)
     filter_threshold: float = 0.55      # P(win) below this → skip position
+    # Stage-6: optional SentimentStore for online sentiment feature lookup.
+    # When set, the strategy passes the store to extract_features_for_date
+    # so v2-trained models (price + sentiment) can compute their inputs.
+    # Empty string = no news_provider = v1 (price-only) behavior.
+    news_provider_path: str = ""
+    news_provider_label: str = "finbert-v1"
 
 
 class MomentumMetaStrategy(MomentumTopNStrategy):
-    """Stage-5 meta-labeled wrapper around Stage-2 momentum top-N."""
+    """Stage-5/6 meta-labeled wrapper around Stage-2 momentum top-N."""
 
     def __init__(self, config: MomentumMetaConfig) -> None:
         super().__init__(config)
@@ -66,6 +72,16 @@ class MomentumMetaStrategy(MomentumTopNStrategy):
                 self._model_store = ModelStore(
                     cache_dir=cache_dir,
                     label=config.model_store_label,
+                )
+        # Stage-6: optional sentiment lookup for online feature extraction.
+        self._news_provider = None
+        if config.news_provider_path:
+            news_cache = Path(config.news_provider_path)
+            if news_cache.exists():
+                # Late import — keeps Stage-5 v1 path free of NLP deps.
+                from nlp.sentiment_store import SentimentStore
+                self._news_provider = SentimentStore(
+                    cache_dir=news_cache, model_version=config.news_provider_label,
                 )
 
     # ---- ring-buffer cap: widen for the feature extractor's lookbacks ----
@@ -127,6 +143,7 @@ class MomentumMetaStrategy(MomentumTopNStrategy):
                 feats = extract_features_for_date(
                     bars_by_ticker, ticker=t, date=rebalance_date,
                     benchmark=self.config.benchmark,
+                    news_provider=self._news_provider,
                 )
                 if not feats:
                     continue
