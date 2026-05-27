@@ -26,6 +26,18 @@ dev = [
     "pytest-asyncio>=0.24",
 ]
 
+# Pin torch to the CPU-only wheel — the default wheel pulls ~3GB of nvidia
+# CUDA libraries even on CPU-only systems, and there's no GPU available
+# here. FinBERT inference on CPU is fast enough for the project's scale
+# (~30k headlines in ~5 min).
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v"
