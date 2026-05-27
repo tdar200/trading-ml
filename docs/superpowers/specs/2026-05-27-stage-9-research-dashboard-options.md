@@ -484,6 +484,116 @@ If we ever revisit dashboard / strategy-tester architecture:
 - **[FreqUI](https://github.com/freqtrade/frequi)** — Vue.js reference for production-grade trader UX.
 - **[VectorBT](https://github.com/polakowo/vectorbt)** — alternative backtest engine if Nautilus's events-per-bar model ever feels slow for sweep work.
 
+## 11. Round-3 deep scan — star-ranked picks + tick / multi-timeframe data sources
+
+Triggered by: "we want tick data, then day, week, month, year, 5 years, 10 years options, even minutes ... a whole range of options like trading view, and **star counts matter**."
+
+Two reframes: (a) the chart layer choice changes when we filter by stars, (b) **the data layer becomes the binding constraint** — we can have any chart engine we want, but we can't show tick or minute history we don't have. Pipeline: 6 parallel SearXNG queries → 23 unique URLs → crawl4ai-fetch top 12 → star + pricing extraction.
+
+### 11.1 Star-ranked landscape (everything we surfaced, ⭐ counts pulled live from GitHub HTML via crawl4ai)
+
+| Project | ⭐ | Category | Verdict |
+|---|---|---|---|
+| **tradingview/lightweight-charts** | **16k** | JS chart lib (the foundation every wrapper wraps) | Use indirectly via a Python wrapper |
+| **kernc/backtesting.py** | 8.4k | Backtester w/ built-in optimizer + Bokeh plot | Engine fork; not picked |
+| **polakowo/vectorbt** | 7.7k | Vectorized backtester + Plotly heatmaps | Engine fork; not picked |
+| **ranaroussi/quantstats** | 7.2k | HTML tearsheets (we use Stage 2) | Keep or swap for Nautilus's native tearsheet |
+| **matplotlib/mplfinance** | 4.4k | Static matplotlib candlesticks | Static only — not picked |
+| **louisnw01/lightweight-charts-python** | **2k** | TradingView LWC for Python (standalone window) | High stars but spawns own window |
+| **marketcalls/openalgo** | **1.9k** | Open-source algo trading platform + Python strategy host + web UI | ⚠️ Indian-market focused but architecture is portable |
+| **freqtrade/frequi** | 995 | Vue.js frontend for Freqtrade | Reference for production UX |
+| **TreborNamor/TradingView-Machine-Learning-GUI** (HyperView) | **948** | Multi-timeframe backtester pulling candles from TradingView websocket | Multi-tf out of the box; ToS concerns |
+| **optuna/optuna-dashboard** | 775 | Real-time hyperparameter dashboard | Drop-in for Stage 9 Backtest Lab |
+| **freyastreamlit/streamlit-lightweight-charts** | **223** | Streamlit-native LWC component | **New winner — highest-star Streamlit-native option** |
+| pssolanki111/polygon | 136 | Python wrapper for Polygon.io API | Use if we go paid |
+| nandkapadia/streamlit-lightweight-charts-pro | 18 | More features but lowest stars | Skip in favor of freyastreamlit's |
+
+**Star-priority chart-layer revision**: drop nandkapadia (18 ⭐), pick **`freyastreamlit/streamlit-lightweight-charts`** (223 ⭐). 12× more battle-tested. Both wrap the same 16k-star TradingView JS lib.
+
+### 11.2 The data-layer constraint (this is what unlocks TradingView-style timeframes)
+
+We currently get **daily bars from Alpaca free-tier IEX** — that's it. The full range you asked for needs more:
+
+| Timeframe | What we have now | What we'd need |
+|---|---|---|
+| Tick | ❌ (only daily) | Live websocket: Alpaca FREE tier supports it. Historical: paid |
+| 1-min | ❌ | Alpaca FREE (live), paid for history; yfinance gives ~7 days |
+| 5/15/30-min | ❌ | Alpaca FREE (live + ~5 years), yfinance ~60 days |
+| 1h / 4h | ❌ | Alpaca FREE (~5 years), yfinance ~730 days |
+| 1d | ✅ (Alpaca FREE) | Already done |
+| 1w / 1M | derive from 1d | Trivial pandas resample |
+| 1Y / 5Y / 10Y | ⚠️ only 5.5yr (Alpaca free-tier IEX) | Tiingo Power (30+ years) or paid Alpaca |
+
+### 11.3 Data-source comparison (with costs)
+
+| Provider | Free tier | Paid tier | Coverage |
+|---|---|---|---|
+| **Alpaca** (current) | IEX feed; live ticks/minutes via websocket; historical bars 1m → 1d (~5.5y on free) | **Algo Trader Plus $99/mo**: SIP feed, full tick history | US stocks/ETFs + crypto. Already integrated. |
+| **Tiingo** | $0 Starter: 30+ years daily, limited intraday | **Power $30/mo**: 30+ years US+Chinese stocks/ETFs, real-time, 5yr fundamental history, 50 symbols/hr cap, 10k/hr, 1k/day | Cheaper than Alpaca Plus, great for daily-and-up |
+| **Polygon.io** | 5 calls/min, 2 years EOD | **Stocks Developer ~$99-199/mo**: unlimited minute bars + 5y tick history | Best raw intraday/tick depth |
+| **yfinance** | Free, no key | None | 1m: ~7 days; 5-30m: ~60 days; 1h: ~730 days; daily: decades. Quality "best-effort." |
+| **HyperView** | Pulls direct from TradingView WS | n/a | All TV timeframes free, **but check TradingView ToS** for commercial use |
+
+**Realistic minimal upgrade for "TradingView-style range"** without breaking the bank: stay on Alpaca FREE for intraday (5+ years of 1m/5m/15m/1h/4h on the IEX feed is plenty), supplement with **Tiingo Power ($30/mo)** for 30-year daily / weekly / monthly / yearly history. Total: **$30/mo** vs $99/mo for Alpaca Plus or $99-199/mo for Polygon.
+
+**Tick history specifically**: live ticks are free via Alpaca websocket; historical tick data is paid territory (Alpaca Plus $99/mo). Most retail trading dashboards show **live ticks streamed in real time**, not historical replay of ticks — and the live-stream side is free.
+
+### 11.4 Architecture for multi-timeframe in the dashboard
+
+```
+┌─ Timeframe selector ───────────────────────────────────────┐
+│ [Tick] [1m] [5m] [15m] [30m] [1h] [4h] [1d] [1w] [1M] [1Y] │
+│   ↑ live websocket ↑    ↑──── derived from 1m via resample ↑│
+└────────────────────────────────────────────────────────────┘
+        │
+        ▼
+┌─ data/multitf.py (new) ─────────────────────────────────────┐
+│ get_bars(ticker, timeframe, start, end) -> pd.DataFrame    │
+│   - if timeframe in {'1m','5m',...}: from data/intraday/   │
+│     (a new parquet shard, populated by                     │
+│      data/ingest_alpaca_intraday.py — same shape as Stage 1)│
+│   - if timeframe == '1d': from data/catalog/ (existing)    │
+│   - if timeframe in {'1w','1M','1Y'}: resample from '1d'   │
+│   - if timeframe == '5y' or '10y': aggregate from '1d'     │
+│   - if timeframe == 'tick': live websocket subscription    │
+│                              (no historical replay)         │
+└─────────────────────────────────────────────────────────────┘
+        │
+        ▼
+┌─ dashboard/views/equity.py ─────────────────────────────────┐
+│ st.segmented_control("Timeframe",                          │
+│     options=["1m","5m","15m","1h","1d","1w","1M","1Y","5Y"])│
+│ df = get_bars(selected_ticker, selected_tf, ...)            │
+│ renderChart(candles=df, volume=df['volume'], ...)           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Concrete build steps** (additive to Stage 9.A''):
+1. **`data/ingest_alpaca_intraday.py`** — sibling of Stage 1's `ingest_alpaca.py` but pulls `BarTimeFrame.Minute` / `Minute(5)` / `Minute(15)` / `Hour` from Alpaca's free historical API. Sharded `data/intraday/<ticker>/<timeframe>/<YYYY-MM>.parquet`. ~150 lines.
+2. **`data/multitf.py`** — `get_bars(ticker, timeframe, start, end)` with three branches:
+   - intraday → load parquet shard
+   - daily/weekly/monthly/yearly → resample
+   - tick → return an async generator off a websocket subscription
+   ~80 lines.
+3. **`dashboard/views/equity.py`** — add `st.segmented_control` for timeframe + ticker selector; render via `streamlit-lightweight-charts`. ~40 lines.
+4. **Live tick stream** (optional Stage 9.5) — needs `chart.update_from_tick(...)` in a `while True: yield from ws.recv()` loop. The `streamlit-lightweight-charts` API supports it.
+
+**Effort**: Stage 9.A'' (2.5 days) **+ ~1 day** for the data layer + multi-tf chart selector = **~3.5 days total**, all on the free Alpaca tier.
+
+### 11.5 Final revised recommendation
+
+| | Choice | Stars | Why |
+|---|---|---|---|
+| Chart engine | **freyastreamlit/streamlit-lightweight-charts** | 223 | Highest-star Streamlit-native LWC component |
+| Underlying JS lib | tradingview/lightweight-charts | 16k | Industry standard |
+| Backtest engine for Lab | analysis.walk_forward (ours) | n/a | Same numbers as canonical harness |
+| Hyperparameter UI | optuna-dashboard | 775 | Free, real-time, parallel-coords/contour plots built-in |
+| Intraday data | Alpaca free-tier IEX | n/a | Already integrated; covers tick (live) + 1m → 1h history for ~5.5 yr |
+| Long history (10y/30y) | Tiingo Power ($30/mo) — **only if needed** | n/a | Cheapest 30-year daily history; consider after Stage 9 lands |
+| Production webapp (later) | FastAPI + React (Black101081 pattern) | 24 | Future Stage 10 if Streamlit feels limiting |
+
+**Stage 9.A''' (final): ~3.5 days, $0 incremental cost on free Alpaca, optional +$30/mo for Tiingo if 10-year history matters.**
+
 ## Sources
 
 Crawled via crawl4ai at `http://localhost:11235/md`:
