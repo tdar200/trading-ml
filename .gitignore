@@ -14,3 +14,6 @@ dist/
 build/
 livesim/cache/
 models/cache/
+nlp/cache/
+data/news/
+models/cache_v2/
