@@ -27,7 +27,6 @@ from typing import Any
 
 import pandas as pd
 
-from nautilus_trader.model.data import Bar
 from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.identifiers import InstrumentId, Venue
 from nautilus_trader.model.objects import Quantity
@@ -68,57 +67,11 @@ class MomentumMetaStrategy(MomentumTopNStrategy):
                     cache_dir=cache_dir,
                     label=config.model_store_label,
                 )
-        # Latest bar timestamp seen — used to align the synthetic index in
-        # _bars_to_series_dict so rebalance_date is locatable in the index.
-        self._last_bar_ts_ns: int = 0
 
-    # ---- on_bar override: maintain a feature-sized history buffer --------
+    # ---- ring-buffer cap: widen for the feature extractor's lookbacks ----
 
-    def on_bar(self, bar: Bar) -> None:
-        """Replicate parent's on_bar but with a buffer cap sized for our
-        feature extractor (up to 126 business days for mom_6m)."""
-        from nautilus_trader.model.identifiers import Venue
-        ticker = self._ticker_for(bar)
-        history = self._closes.setdefault(ticker, [])
-        history.append(float(bar.close))
-        # Cap = max(parent cap, feature minimum). Keeps the larger of the
-        # two so deployments configured with a long lookback aren't shrunk.
-        parent_cap = self.config.lookback_days + self.config.skip_days + 5
-        cap = max(parent_cap, _MIN_FEATURE_HISTORY)
-        if len(history) > cap:
-            del history[0 : len(history) - cap]
-
-        # Track latest seen bar timestamp (used to align the synthetic index
-        # built in _bars_to_series_dict with the rebalance_date passed to
-        # the feature extractor).
-        self._last_bar_ts_ns = max(self._last_bar_ts_ns, int(bar.ts_event))
-
-        # Daily equity snapshot — only on benchmark bars (mirrors parent).
-        if ticker == self.config.benchmark:
-            year, month, day = self._year_month_day(bar.ts_event)
-            if self._last_equity_snapshot_date != (year, month, day):
-                self._last_equity_snapshot_date = (year, month, day)
-                try:
-                    venue = Venue(VENUE_MIC)
-                    account = self.portfolio.account(venue)
-                    if account is not None:
-                        eq_money = self.portfolio.equity(venue)[account.base_currency]
-                        self._equity_history.append(
-                            (bar.ts_event, float(eq_money.as_decimal()))
-                        )
-                except (KeyError, AttributeError, TypeError):
-                    pass
-
-        # Rebalance check (mirrors parent).
-        if ticker not in self.config.universe:
-            return
-        if not self._is_warmed_up():
-            return
-        year, month = self._year_month(bar.ts_event)
-        if self._last_rebalance_month == (year, month):
-            return
-        self._last_rebalance_month = (year, month)
-        self._rebalance(bar.ts_event)
+    def _history_cap(self) -> int:
+        return max(super()._history_cap(), _MIN_FEATURE_HISTORY)
 
     # ---- _rebalance override ----------------------------------------------
 
@@ -151,10 +104,9 @@ class MomentumMetaStrategy(MomentumTopNStrategy):
         # Load a model for this date; None → baseline behaviour.
         model_payload = None
         if self._model_store is not None:
-            try:
-                model_payload = self._model_store.load_for(rebalance_date)
-            except Exception:
-                model_payload = None
+            # Let real store errors propagate; only "no model yet" returns None
+            # (handled by the warm-up fallback below).
+            model_payload = self._model_store.load_for(rebalance_date)
 
         if model_payload is None:
             # Baseline (warm-up): top_n at full base_weight.

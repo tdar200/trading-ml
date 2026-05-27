@@ -59,7 +59,7 @@ class MomentumTopNStrategy(Strategy):
         ticker = self._ticker_for(bar)
         history = self._closes.setdefault(ticker, [])
         history.append(float(bar.close))
-        cap = self.config.lookback_days + self.config.skip_days + 5
+        cap = self._history_cap()
         if len(history) > cap:
             del history[0 : len(history) - cap]
 
@@ -101,6 +101,10 @@ class MomentumTopNStrategy(Strategy):
     def _ticker_for(self, bar: Bar) -> str:
         # BarType serializes as "<TICKER>.<VENUE>-1-DAY-...". Pull the ticker out.
         return str(bar.bar_type).split(".")[0]
+
+    def _history_cap(self) -> int:
+        """Maximum length of the per-ticker close ring buffer. Subclasses may widen for richer features."""
+        return self.config.lookback_days + self.config.skip_days + 5
 
     def _is_warmed_up(self) -> bool:
         needed = self.config.lookback_days + self.config.skip_days + 1
