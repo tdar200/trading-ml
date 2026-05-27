@@ -72,6 +72,14 @@ def main() -> int:
         print("ERROR: catalog is empty. Run data/ingest_alpaca.py first.")
         return 1
 
+    # Pre-flight: without trained models the meta strategy silently falls
+    # back to baseline on every rebalance, producing a meaningless verdict.
+    if not any(CACHE_DIR.glob("*.joblib")):
+        print(f"WARNING: {CACHE_DIR} contains no model artifacts. "
+              f"Run examples/train_meta_models.py first, otherwise meta "
+              f"will fall back to baseline on every rebalance and the "
+              f"DSR comparison is meaningless.")
+
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_dir = RESULTS_ROOT / f"harness_meta_{timestamp}"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -129,11 +137,19 @@ def main() -> int:
         slippage_prob=0.25,
     )
     meta_df.to_csv(out_dir / "meta.csv", index=False)
+    if meta_df.empty:
+        print("ERROR: meta walk-forward produced no rows. "
+              "Check models/cache/ has artifacts and that the harness "
+              "didn't filter out every window.")
+        return 1
     print(f"  meta runs: {len(meta_df)}; max median Sharpe: "
           f"{meta_df.groupby(['model_store_label', 'filter_threshold'])['sharpe'].median().max():.4f}")
 
     # 3. Deflated Sharpe over baseline + meta combos.
     sharpes = pd.concat([base_df["sharpe"], meta_df["sharpe"]]).dropna().tolist()
+    # Conservative n_obs: shortest (first) window's day count. Inflates
+    # σ_SR_obs and biases the deflated z toward "NO" — appropriate for a
+    # meta-overlay where false positives cost more than false negatives.
     n_obs = int(meta_df["n_days"].iloc[0]) if len(meta_df) else int(base_df["n_days"].iloc[0])
     dsr = deflated_sharpe(sharpes=sharpes, n_obs=n_obs)
     print(f"DSR: p-value={dsr['p_value']:.4f}, z={dsr['deflated_sharpe']:.4f}")
@@ -144,6 +160,7 @@ def main() -> int:
     meta_winner_idx = meta_grouped.idxmax()
     meta_winner_median = float(meta_grouped.max())
     meta_beats = meta_winner_median > baseline_median
+    verdict = meta_beats and dsr["p_value"] > 0.95
 
     md = f"""# Stage-5 Meta-Labeling Harness — {timestamp}
 
@@ -166,7 +183,7 @@ def main() -> int:
 ## Verdict
 - Meta beats baseline OOS: **{'YES' if meta_beats else 'NO'}**
 - Meta winner survives DSR: **{'YES' if dsr['p_value'] > 0.95 else 'NO'}** (p > 0.95)
-- Overall verdict: **{('YES' if (meta_beats and dsr['p_value'] > 0.95) else 'NO')} — meta did{'' if (meta_beats and dsr['p_value'] > 0.95) else ' not'} clearly beat baseline.**
+- Overall verdict: **{'YES' if verdict else 'NO'} — meta did{'' if verdict else ' not'} clearly beat baseline.**
 """
     (out_dir / "summary.md").write_text(md)
 
