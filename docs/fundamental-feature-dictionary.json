@@ -1,0 +1,1202 @@
+{
+  "feature_version": "fundamentals-v4-audited",
+  "raw": {
+    "revenue": {
+      "sec_tags_priority": [
+        "Revenues",
+        "RevenueFromContractWithCustomerExcludingAssessedTax",
+        "SalesRevenueNet",
+        "SalesRevenueGoodsNet",
+        "RegulatedAndUnregulatedOperatingRevenue"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "gross_profit": {
+      "sec_tags_priority": [
+        "GrossProfit"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "cogs": {
+      "sec_tags_priority": [
+        "CostOfRevenue",
+        "CostOfGoodsAndServicesSold",
+        "CostOfGoodsSold"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "operating_income": {
+      "sec_tags_priority": [
+        "OperatingIncomeLoss"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "net_income": {
+      "sec_tags_priority": [
+        "NetIncomeLoss",
+        "ProfitLoss"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "eps": {
+      "sec_tags_priority": [
+        "EarningsPerShareDiluted"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "cash": {
+      "sec_tags_priority": [
+        "CashAndCashEquivalentsAtCarryingValue"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "current_assets": {
+      "sec_tags_priority": [
+        "AssetsCurrent"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "assets": {
+      "sec_tags_priority": [
+        "Assets"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "current_liabilities": {
+      "sec_tags_priority": [
+        "LiabilitiesCurrent"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "liabilities": {
+      "sec_tags_priority": [
+        "Liabilities"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "short_debt": {
+      "sec_tags_priority": [
+        "DebtCurrent"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "long_debt": {
+      "sec_tags_priority": [
+        "LongTermDebtNoncurrent"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "equity": {
+      "sec_tags_priority": [
+        "StockholdersEquity",
+        "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "inventory": {
+      "sec_tags_priority": [
+        "InventoryNet"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "receivables": {
+      "sec_tags_priority": [
+        "AccountsReceivableNetCurrent"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "payables": {
+      "sec_tags_priority": [
+        "AccountsPayableCurrent"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "prepaids": {
+      "sec_tags_priority": [
+        "PrepaidExpenseCurrent"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "goodwill": {
+      "sec_tags_priority": [
+        "Goodwill"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "ocf": {
+      "sec_tags_priority": [
+        "NetCashProvidedByUsedInOperatingActivities"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "capex": {
+      "sec_tags_priority": [
+        "PaymentsToAcquirePropertyPlantAndEquipment"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "investing_cf": {
+      "sec_tags_priority": [
+        "NetCashProvidedByUsedInInvestingActivities"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "financing_cf": {
+      "sec_tags_priority": [
+        "NetCashProvidedByUsedInFinancingActivities"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "interest_expense": {
+      "sec_tags_priority": [
+        "InterestExpense",
+        "InterestAndDebtExpense"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "pretax_income": {
+      "sec_tags_priority": [
+        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "tax_expense": {
+      "sec_tags_priority": [
+        "IncomeTaxExpenseBenefit"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "depreciation": {
+      "sec_tags_priority": [
+        "DepreciationDepletionAndAmortization",
+        "DepreciationDepletionAndAmortizationPropertyPlantAndEquipment"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "diluted_shares": {
+      "sec_tags_priority": [
+        "WeightedAverageNumberOfDilutedSharesOutstanding"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "shares_outstanding": {
+      "sec_tags_priority": [
+        "CommonStockSharesOutstanding"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "retained_earnings": {
+      "sec_tags_priority": [
+        "RetainedEarningsAccumulatedDeficit"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "rd": {
+      "sec_tags_priority": [
+        "ResearchAndDevelopmentExpense"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "buybacks": {
+      "sec_tags_priority": [
+        "PaymentsForRepurchaseOfCommonStock"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "dividends": {
+      "sec_tags_priority": [
+        "PaymentsOfDividendsCommonStock",
+        "PaymentsOfDividends"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "issuance": {
+      "sec_tags_priority": [
+        "ProceedsFromStockOptionsExercised",
+        "ProceedsFromIssuanceOfCommonStock"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    },
+    "acquisitions": {
+      "sec_tags_priority": [
+        "PaymentsToAcquireBusinessesNetOfCashAcquired"
+      ],
+      "units": "source units preserved; currencies never implicitly combined",
+      "timestamp": "filing acceptance +5min; if unavailable, following New York calendar day",
+      "revision": "SEC accession",
+      "normalization": "none before accounting transformations"
+    }
+  },
+  "derived": {
+    "fcf": {
+      "formula": "ocf - positive cash capex",
+      "dimension": "quality",
+      "economic_rationale": "Cash-backed profitability and capital efficiency may distinguish persistent business economics from price strength.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Novy-Marx 2013 gross profitability; Asness/Frazzini/Pedersen 2019 QMJ; local incremental evidence required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "ebitda_proxy": {
+      "formula": "operating_income + depreciation; proxy, not reported EBITDA",
+      "dimension": "quality",
+      "economic_rationale": "Cash-backed profitability and capital efficiency may distinguish persistent business economics from price strength.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Novy-Marx 2013 gross profitability; Asness/Frazzini/Pedersen 2019 QMJ; local incremental evidence required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "debt": {
+      "formula": "short_debt + long_debt (both required)",
+      "dimension": "health",
+      "economic_rationale": "Liquidity and debt service affect distress exposure; the same leverage ratio has different meaning by industry.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Balance-sheet distress hypothesis; sector-specific interpretation; no validated trading threshold",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "net_debt": {
+      "formula": "debt - cash",
+      "dimension": "health",
+      "economic_rationale": "Liquidity and debt service affect distress exposure; the same leverage ratio has different meaning by industry.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Balance-sheet distress hypothesis; sector-specific interpretation; no validated trading threshold",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "gross_margin": {
+      "formula": "gross_profit / revenue",
+      "dimension": "quality",
+      "economic_rationale": "Cash-backed profitability and capital efficiency may distinguish persistent business economics from price strength.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Novy-Marx 2013 gross profitability; Asness/Frazzini/Pedersen 2019 QMJ; local incremental evidence required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "operating_margin": {
+      "formula": "operating_income / revenue",
+      "dimension": "quality",
+      "economic_rationale": "Cash-backed profitability and capital efficiency may distinguish persistent business economics from price strength.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Novy-Marx 2013 gross profitability; Asness/Frazzini/Pedersen 2019 QMJ; local incremental evidence required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "net_margin": {
+      "formula": "net_income / revenue",
+      "dimension": "quality",
+      "economic_rationale": "Cash-backed profitability and capital efficiency may distinguish persistent business economics from price strength.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Novy-Marx 2013 gross profitability; Asness/Frazzini/Pedersen 2019 QMJ; local incremental evidence required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "fcf_margin": {
+      "formula": "fcf / revenue",
+      "dimension": "quality",
+      "economic_rationale": "Cash-backed profitability and capital efficiency may distinguish persistent business economics from price strength.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Novy-Marx 2013 gross profitability; Asness/Frazzini/Pedersen 2019 QMJ; local incremental evidence required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "ebitda_margin": {
+      "formula": "ebitda_proxy / revenue",
+      "dimension": "quality",
+      "economic_rationale": "Cash-backed profitability and capital efficiency may distinguish persistent business economics from price strength.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Novy-Marx 2013 gross profitability; Asness/Frazzini/Pedersen 2019 QMJ; local incremental evidence required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "roe": {
+      "formula": "net_income / mean(current equity, prior comparable-year equity)",
+      "dimension": "quality",
+      "economic_rationale": "Cash-backed profitability and capital efficiency may distinguish persistent business economics from price strength.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Novy-Marx 2013 gross profitability; Asness/Frazzini/Pedersen 2019 QMJ; local incremental evidence required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "roa": {
+      "formula": "net_income / mean(current assets, prior comparable-year assets)",
+      "dimension": "quality",
+      "economic_rationale": "Cash-backed profitability and capital efficiency may distinguish persistent business economics from price strength.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Novy-Marx 2013 gross profitability; Asness/Frazzini/Pedersen 2019 QMJ; local incremental evidence required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "gross_profitability": {
+      "formula": "gross_profit / assets",
+      "dimension": "quality",
+      "economic_rationale": "Cash-backed profitability and capital efficiency may distinguish persistent business economics from price strength.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Novy-Marx 2013 gross profitability; Asness/Frazzini/Pedersen 2019 QMJ; local incremental evidence required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "roic": {
+      "formula": "operating_income * (1 - tax_expense/pretax_income) / average invested capital; invested capital = debt + equity - cash; tax rate must be in [0,1]",
+      "dimension": "quality",
+      "economic_rationale": "Cash-backed profitability and capital efficiency may distinguish persistent business economics from price strength.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Novy-Marx 2013 gross profitability; Asness/Frazzini/Pedersen 2019 QMJ; local incremental evidence required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "current_ratio": {
+      "formula": "current_assets / current_liabilities",
+      "dimension": "health",
+      "economic_rationale": "Liquidity and debt service affect distress exposure; the same leverage ratio has different meaning by industry.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Balance-sheet distress hypothesis; sector-specific interpretation; no validated trading threshold",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "quick_ratio": {
+      "formula": "(current_assets - inventory - prepaids) / current_liabilities; missing prepaids are not zero",
+      "dimension": "health",
+      "economic_rationale": "Liquidity and debt service affect distress exposure; the same leverage ratio has different meaning by industry.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Balance-sheet distress hypothesis; sector-specific interpretation; no validated trading threshold",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "debt_equity": {
+      "formula": "debt / positive equity",
+      "dimension": "health",
+      "economic_rationale": "Liquidity and debt service affect distress exposure; the same leverage ratio has different meaning by industry.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Balance-sheet distress hypothesis; sector-specific interpretation; no validated trading threshold",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "net_debt_ebitda": {
+      "formula": "net_debt / positive EBITDA proxy",
+      "dimension": "health",
+      "economic_rationale": "Liquidity and debt service affect distress exposure; the same leverage ratio has different meaning by industry.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Balance-sheet distress hypothesis; sector-specific interpretation; no validated trading threshold",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "interest_coverage": {
+      "formula": "operating_income / positive interest_expense",
+      "dimension": "health",
+      "economic_rationale": "Liquidity and debt service affect distress exposure; the same leverage ratio has different meaning by industry.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Balance-sheet distress hypothesis; sector-specific interpretation; no validated trading threshold",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "cash_debt": {
+      "formula": "cash / positive debt",
+      "dimension": "health",
+      "economic_rationale": "Liquidity and debt service affect distress exposure; the same leverage ratio has different meaning by industry.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Balance-sheet distress hypothesis; sector-specific interpretation; no validated trading threshold",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "ocf_net_income": {
+      "formula": "ocf / positive net_income",
+      "dimension": "earnings_quality",
+      "economic_rationale": "Divergence between earnings, working capital and operating cash may reveal transitory earnings; not an allegation of fraud.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Sloan accrual hypothesis; independent historical cash-flow definitions and costs required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "fcf_net_income": {
+      "formula": "fcf / positive net_income",
+      "dimension": "earnings_quality",
+      "economic_rationale": "Divergence between earnings, working capital and operating cash may reveal transitory earnings; not an allegation of fraud.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Sloan accrual hypothesis; independent historical cash-flow definitions and costs required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "accrual_ratio": {
+      "formula": "(net_income - ocf) / average assets; cash-flow accrual proxy",
+      "dimension": "earnings_quality",
+      "economic_rationale": "Divergence between earnings, working capital and operating cash may reveal transitory earnings; not an allegation of fraud.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Sloan accrual hypothesis; independent historical cash-flow definitions and costs required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "revenue_acceleration": {
+      "formula": "current revenue YoY minus prior comparable revenue YoY",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "eps_acceleration": {
+      "formula": "current EPS YoY minus prior EPS YoY",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "fcf_acceleration": {
+      "formula": "current FCF YoY minus prior FCF YoY",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "receivables_vs_sales": {
+      "formula": "receivables YoY minus revenue YoY",
+      "dimension": "earnings_quality",
+      "economic_rationale": "Divergence between earnings, working capital and operating cash may reveal transitory earnings; not an allegation of fraud.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Sloan accrual hypothesis; independent historical cash-flow definitions and costs required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "inventory_vs_sales": {
+      "formula": "inventory YoY minus revenue YoY",
+      "dimension": "earnings_quality",
+      "economic_rationale": "Divergence between earnings, working capital and operating cash may reveal transitory earnings; not an allegation of fraud.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Sloan accrual hypothesis; independent historical cash-flow definitions and costs required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "gross_margin_change": {
+      "formula": "current gross margin minus prior comparable gross margin",
+      "dimension": "quality",
+      "economic_rationale": "Cash-backed profitability and capital efficiency may distinguish persistent business economics from price strength.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Novy-Marx 2013 gross profitability; Asness/Frazzini/Pedersen 2019 QMJ; local incremental evidence required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "operating_margin_change": {
+      "formula": "current operating margin minus prior comparable operating margin",
+      "dimension": "quality",
+      "economic_rationale": "Cash-backed profitability and capital efficiency may distinguish persistent business economics from price strength.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Novy-Marx 2013 gross profitability; Asness/Frazzini/Pedersen 2019 QMJ; local incremental evidence required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "debt_change": {
+      "formula": "current debt minus prior comparable debt",
+      "dimension": "health",
+      "economic_rationale": "Liquidity and debt service affect distress exposure; the same leverage ratio has different meaning by industry.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Balance-sheet distress hypothesis; sector-specific interpretation; no validated trading threshold",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "cash_change": {
+      "formula": "current cash minus prior comparable cash",
+      "dimension": "health",
+      "economic_rationale": "Liquidity and debt service affect distress exposure; the same leverage ratio has different meaning by industry.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Balance-sheet distress hypothesis; sector-specific interpretation; no validated trading threshold",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "asset_turnover": {
+      "formula": "annual revenue / average assets",
+      "dimension": "allocation",
+      "economic_rationale": "Investment, dilution and distributions affect future per-share cash flows; direction is conditional on reinvestment returns.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Investment and issuance literature; signs may depend on profitability; local validation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "inventory_turnover": {
+      "formula": "annual COGS / average inventory",
+      "dimension": "allocation",
+      "economic_rationale": "Investment, dilution and distributions affect future per-share cash flows; direction is conditional on reinvestment returns.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Investment and issuance literature; signs may depend on profitability; local validation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "rd_sales": {
+      "formula": "R&D / revenue",
+      "dimension": "allocation",
+      "economic_rationale": "Investment, dilution and distributions affect future per-share cash flows; direction is conditional on reinvestment returns.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Investment and issuance literature; signs may depend on profitability; local validation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "capex_sales": {
+      "formula": "cash capex / revenue",
+      "dimension": "allocation",
+      "economic_rationale": "Investment, dilution and distributions affect future per-share cash flows; direction is conditional on reinvestment returns.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Investment and issuance literature; signs may depend on profitability; local validation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "buybacks_ocf": {
+      "formula": "buyback cash / OCF",
+      "dimension": "allocation",
+      "economic_rationale": "Investment, dilution and distributions affect future per-share cash flows; direction is conditional on reinvestment returns.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Investment and issuance literature; signs may depend on profitability; local validation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "dividends_ocf": {
+      "formula": "dividend cash / OCF",
+      "dimension": "allocation",
+      "economic_rationale": "Investment, dilution and distributions affect future per-share cash flows; direction is conditional on reinvestment returns.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Investment and issuance literature; signs may depend on profitability; local validation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "acquisitions_assets": {
+      "formula": "acquisition cash / assets",
+      "dimension": "allocation",
+      "economic_rationale": "Investment, dilution and distributions affect future per-share cash flows; direction is conditional on reinvestment returns.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Investment and issuance literature; signs may depend on profitability; local validation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "issuance_equity": {
+      "formula": "issuance proceeds / positive equity",
+      "dimension": "allocation",
+      "economic_rationale": "Investment, dilution and distributions affect future per-share cash flows; direction is conditional on reinvestment returns.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Investment and issuance literature; signs may depend on profitability; local validation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "receivable_days": {
+      "formula": "365 * average receivables / annual revenue",
+      "dimension": "allocation",
+      "economic_rationale": "Investment, dilution and distributions affect future per-share cash flows; direction is conditional on reinvestment returns.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Investment and issuance literature; signs may depend on profitability; local validation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "inventory_days": {
+      "formula": "365 * average inventory / annual COGS",
+      "dimension": "allocation",
+      "economic_rationale": "Investment, dilution and distributions affect future per-share cash flows; direction is conditional on reinvestment returns.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Investment and issuance literature; signs may depend on profitability; local validation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "payable_days": {
+      "formula": "365 * average payables / annual COGS",
+      "dimension": "allocation",
+      "economic_rationale": "Investment, dilution and distributions affect future per-share cash flows; direction is conditional on reinvestment returns.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Investment and issuance literature; signs may depend on profitability; local validation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "cash_conversion_cycle": {
+      "formula": "receivable_days + inventory_days - payable_days",
+      "dimension": "allocation",
+      "economic_rationale": "Investment, dilution and distributions affect future per-share cash flows; direction is conditional on reinvestment returns.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Investment and issuance literature; signs may depend on profitability; local validation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "incremental_roic": {
+      "formula": "change NOPAT / positive change invested capital",
+      "dimension": "allocation",
+      "economic_rationale": "Investment, dilution and distributions affect future per-share cash flows; direction is conditional on reinvestment returns.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Investment and issuance literature; signs may depend on profitability; local validation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "gross_margin_stability": {
+      "formula": "sample standard deviation of three known annual gross margins; lower means more stable",
+      "dimension": "quality",
+      "economic_rationale": "Cash-backed profitability and capital efficiency may distinguish persistent business economics from price strength.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Novy-Marx 2013 gross profitability; Asness/Frazzini/Pedersen 2019 QMJ; local incremental evidence required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "earnings_stability": {
+      "formula": "sample standard deviation of three annual net incomes / absolute mean; undefined at zero mean",
+      "dimension": "quality",
+      "economic_rationale": "Cash-backed profitability and capital efficiency may distinguish persistent business economics from price strength.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Novy-Marx 2013 gross profitability; Asness/Frazzini/Pedersen 2019 QMJ; local incremental evidence required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "revenue_cagr_3y": {
+      "formula": "(current revenue / positive revenue three fiscal years earlier)^(1/3)-1",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "revenue_cagr_5y": {
+      "formula": "(current revenue / positive revenue five fiscal years earlier)^(1/5)-1",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "revenue_yoy": {
+      "formula": "current revenue / positive comparable prior-year revenue - 1",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "eps_yoy": {
+      "formula": "current eps / positive comparable prior-year eps - 1",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "operating_income_yoy": {
+      "formula": "current operating_income / positive comparable prior-year operating_income - 1",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "receivables_yoy": {
+      "formula": "current receivables / positive comparable prior-year receivables - 1",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "inventory_yoy": {
+      "formula": "current inventory / positive comparable prior-year inventory - 1",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "diluted_shares_yoy": {
+      "formula": "current diluted_shares / positive comparable prior-year diluted_shares - 1",
+      "dimension": "allocation",
+      "economic_rationale": "Investment, dilution and distributions affect future per-share cash flows; direction is conditional on reinvestment returns.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Investment and issuance literature; signs may depend on profitability; local validation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "cash_yoy": {
+      "formula": "current cash / positive comparable prior-year cash - 1",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "assets_yoy": {
+      "formula": "current assets / positive comparable prior-year assets - 1",
+      "dimension": "allocation",
+      "economic_rationale": "Investment, dilution and distributions affect future per-share cash flows; direction is conditional on reinvestment returns.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Investment and issuance literature; signs may depend on profitability; local validation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "fcf_yoy": {
+      "formula": "current fcf / positive comparable prior-year fcf - 1",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "ebitda_yoy": {
+      "formula": "current ebitda / positive comparable prior-year ebitda - 1",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "revenue_qoq": {
+      "formula": "latest discrete-quarter revenue / positive immediately prior quarter - 1; YTD differenced before comparison",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "eps_qoq": {
+      "formula": "latest discrete-quarter eps / positive immediately prior quarter - 1; YTD differenced before comparison",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "ocf_qoq": {
+      "formula": "latest discrete-quarter ocf / positive immediately prior quarter - 1; YTD differenced before comparison",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    },
+    "operating_income_qoq": {
+      "formula": "latest discrete-quarter operating_income / positive immediately prior quarter - 1; YTD differenced before comparison",
+      "dimension": "growth",
+      "economic_rationale": "Changes in the business may convey information beyond the current level; high growth alone can be expensive.",
+      "source": "SEC accession-tagged US-GAAP facts or validated provider-neutral dated records",
+      "availability": "max publication availability of all dependency versions; never period_end",
+      "historical_availability": "SEC structured reporting generally from 2009; tag/issuer coverage varies",
+      "normalization": "raw accounting ratio/change first; PIT sector percentile or train-only standardization for models",
+      "missing_rule": "None for absent inputs, mismatched currency/duration, or invalid denominator; no zero imputation",
+      "validation": "deterministic arithmetic/PIT fixtures; purged 1/5/20/60/120-session IC and cost-aware temporal ablation when coverage exists",
+      "evidence": "Earnings/fundamental momentum hypothesis; growth alone is not a priced edge; local IC and ablation required",
+      "local_predictive_usefulness": "NOT_ESTABLISHED",
+      "production_weight": null
+    }
+  }
+}

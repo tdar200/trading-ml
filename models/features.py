@@ -2,7 +2,12 @@
 Feature extraction for the meta-labeling model.
 
 10 features (one encoded as 2 columns) per (ticker, date), all computed
-from data strictly BEFORE the date. Two public entry points:
+from data THROUGH the close of ``date`` (inclusive; nothing after it). The
+backtests fill at that same bar's close, so the decision information is not
+strictly earlier than the fill instant (QA re-audit 2026-10-01, QA-BT-02): a
+known, documented limitation of the Stage 5 research, not a leak of FUTURE
+bars. Making features strictly causal means using close[t-1] (or filling at
+the next open) and re-training every stored model. Two public entry points:
 
 - ``make_features(...)`` — batch, used by the offline trainer.
 - ``extract_features_for_date(...)`` — single-row, used online by the strategy

@@ -1,0 +1,1 @@
+ABR.PRD daily adjusted OHLCV, fetched from Alpaca IEX on 2026-09-30. Regression for GPU/canonical Bollinger signal disagreement on 2025-08-15. Tests use the first 80% only; final 20% remains reserved. Prices are input fixtures, not a return claim.\n

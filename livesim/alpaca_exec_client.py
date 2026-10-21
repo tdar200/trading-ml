@@ -78,6 +78,11 @@ def _build_market_order_request(
     from alpaca.trading.enums import OrderSide as AlpacaOrderSide, TimeInForce
     from alpaca.trading.requests import MarketOrderRequest
 
+    units=Decimal(str(qty))
+    if not units.is_finite() or units<=0 or units!=units.to_integral_value():
+        raise ValueError('legacy adapter requires positive whole-share quantity')
+    if side not in (OrderSide.BUY,OrderSide.SELL):
+        raise ValueError('invalid order side')
     alpaca_side = AlpacaOrderSide.BUY if side == OrderSide.BUY else AlpacaOrderSide.SELL
     return MarketOrderRequest(
         symbol=symbol,
@@ -229,7 +234,7 @@ class AlpacaLiveExecutionClient(LiveExecutionClient):
                 await asyncio.sleep(wait_remaining)
 
         request = _build_market_order_request(
-            ticker, int(order.quantity), order.side, client_order_id=client_oid,
+            ticker, order.quantity, order.side, client_order_id=client_oid,
         )
         client = self._build_trading_client()
 
@@ -341,26 +346,28 @@ class AlpacaLiveExecutionClient(LiveExecutionClient):
         """Inspect one Alpaca order and emit a Nautilus OrderFilled if new."""
         alpaca_id = str(alpaca_order.id)
         status = _translate_alpaca_status(getattr(alpaca_order, "status", ""))
-        if status in {"rejected", "cancelled"}:
-            self._log.warning(
-                f"Alpaca order {alpaca_id} status={status}: {getattr(alpaca_order, 'symbol', '?')} "
-                f"{getattr(alpaca_order, 'side', '?')} {getattr(alpaca_order, 'qty', '?')}"
-            )
-            return
-        if status != "filled":
-            return  # partial / pending: wait for full fill
-        if alpaca_id in self._emitted_fills:
-            return  # already emitted
-
+        # Broker quantities/prices are cumulative. Emit only the unbooked delta,
+        # including fills reported on a subsequently cancelled order.
+        from types import SimpleNamespace
+        if alpaca_id in self._emitted_fills:return
         order = self._alpaca_to_nautilus.get(alpaca_id)
-        if order is None:
-            # Filled order we don't recognise (e.g., placed via Alpaca UI
-            # during reconciliation). Skip — strategy doesn't own it.
+        if order is None:return
+        if not hasattr(self, '_fill_totals'):self._fill_totals={}
+        previous_qty,previous_notional=self._fill_totals.get(alpaca_id,(Decimal(0),Decimal(0)))
+        qty=Decimal(str(getattr(alpaca_order,'filled_qty',0) or 0))
+        price=Decimal(str(getattr(alpaca_order,'filled_avg_price',0) or 0))
+        if not qty.is_finite() or not price.is_finite() or qty<0 or price<0:raise ValueError('invalid broker fill')
+        if qty<previous_qty:return  # stale/out-of-order cumulative update
+        notional=qty*price
+        if qty==previous_qty:
+            if notional!=previous_notional:raise ValueError('broker fill correction requires reconciliation')
             return
-
-        self._emit_fill_from_alpaca(order, alpaca_order)
-        self._emitted_fills.add(alpaca_id)
-        self._fills_emitted += 1
+        delta=qty-previous_qty;delta_price=(notional-previous_notional)/delta
+        if delta_price<=0:raise ValueError('invalid incremental broker fill price')
+        self._emit_fill_from_alpaca(order,SimpleNamespace(id=alpaca_id,filled_qty=str(delta),filled_avg_price=str(delta_price)))
+        self._fill_totals[alpaca_id]=(qty,notional)
+        self._fills_emitted+=1
+        if status=='filled':self._emitted_fills.add(alpaca_id)
 
     def _emit_fill_from_alpaca(self, nautilus_order, alpaca_order) -> None:
         """Emit a Nautilus OrderFilled from an Alpaca filled order."""
@@ -377,7 +384,7 @@ class AlpacaLiveExecutionClient(LiveExecutionClient):
             last_px = Price(fill_price_decimal, precision=2)
 
         from nautilus_trader.model.objects import Quantity
-        last_qty = Quantity.from_int(int(fill_qty))
+        last_qty = Quantity.from_str(format(fill_qty, "f"))
 
         ts_event = self._clock.timestamp_ns()
         venue_order_id = VenueOrderId(str(alpaca_order.id))

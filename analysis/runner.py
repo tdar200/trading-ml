@@ -22,6 +22,45 @@ from analysis.runspec import RunResult, RunSpec
 from strategies.backtest_setup import add_default_backtest_venue
 
 
+def _required_tickers(spec: RunSpec) -> set[str]:
+    """Return the instruments explicitly required by a strategy config."""
+    config = spec.strategy_config
+    universe = set(getattr(config, "universe", ()) or ())
+    benchmark = getattr(config, "benchmark", None)
+    if benchmark:
+        universe.add(str(benchmark))
+    return universe
+
+
+def _validate_inputs(
+    spec: RunSpec,
+    bars_by_ticker: dict[str, list[Bar]],
+    instruments: list[Equity],
+) -> None:
+    """Fail closed on data defects which can invalidate a backtest."""
+    required = _required_tickers(spec)
+    missing = sorted(t for t in required if not bars_by_ticker.get(t))
+    if missing:
+        raise ValueError(f"missing bars for required tickers: {missing}")
+
+    instrument_ids = {str(instrument.id) for instrument in instruments}
+    for ticker in sorted(required or bars_by_ticker.keys()):
+        bars = bars_by_ticker.get(ticker, [])
+        previous_ts: int | None = None
+        for bar in bars:
+            if previous_ts is not None and bar.ts_event <= previous_ts:
+                kind = "duplicate" if bar.ts_event == previous_ts else "unsorted"
+                raise ValueError(f"{kind} bar timestamp for {ticker}: {bar.ts_event}")
+            previous_ts = bar.ts_event
+            actual_ticker = str(bar.bar_type).split(".", 1)[0]
+            if actual_ticker != ticker:
+                raise ValueError(
+                    f"bar mapping mismatch: key {ticker!r} contains {actual_ticker!r} bar"
+                )
+            if str(bar.bar_type.instrument_id) not in instrument_ids:
+                raise ValueError(f"no instrument supplied for {bar.bar_type.instrument_id}")
+
+
 def _bars_in_window(bars: list[Bar], start_ns: int, end_ns: int) -> list[Bar]:
     return [b for b in bars if start_ns <= b.ts_event < end_ns]
 
@@ -75,9 +114,11 @@ def run(
     instruments: list[Equity],
 ) -> RunResult:
     """Execute the backtest defined by `spec` against the provided bars + instruments."""
+    if spec.validate_data:
+        _validate_inputs(spec, bars_by_ticker, instruments)
     engine_config = BacktestEngineConfig(
         trader_id=TraderId(f"HARNESS-{spec.label[:32]}"),  # TraderId requires a hyphen
-        logging=LoggingConfig(log_level="WARNING"),
+        logging=LoggingConfig(log_level=spec.log_level),
     )
     engine = BacktestEngine(config=engine_config)
     venue = add_default_backtest_venue(

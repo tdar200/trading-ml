@@ -7,6 +7,7 @@ from dashboard.views.backtest_lab import (
     discover_strategies,
     make_param_grid,
     field_default,
+    valid_numeric_space,
 )
 
 
@@ -49,6 +50,26 @@ def test_make_param_grid_combinatorial():
 def test_make_param_grid_empty_returns_one_empty_dict():
     """Empty ranges = no-op = run with base params only."""
     assert make_param_grid({}) == [{}]
+
+
+def test_valid_numeric_space_accepts_enumerable_ranges():
+    space = {
+        "top_n": {"low": 1, "high": 5, "step": 1},
+        "lookback_days": {"low": 21, "high": 126, "step": 21},
+    }
+    assert valid_numeric_space(space)
+
+
+@pytest.mark.parametrize(
+    "space",
+    [
+        {},
+        {"top_n": {"low": 5, "high": 1, "step": 1}},
+        {"top_n": {"low": 1, "high": 5, "step": 0}},
+    ],
+)
+def test_valid_numeric_space_rejects_transient_form_states(space):
+    assert not valid_numeric_space(space)
 
 
 def test_field_default_returns_msgspec_default():

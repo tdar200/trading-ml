@@ -22,7 +22,7 @@ def cagr(returns: pd.Series, periods_per_year: int = 252) -> float:
 
 
 def sharpe(returns: pd.Series, periods_per_year: int = 252, rf: float = 0.0) -> float:
-    """Annualized Sharpe ratio (ddof=0 for population std — consistent across the project)."""
+    """Annualized Sharpe ratio (ddof=0 for population std — legacy convention; small-account metrics use sample ddof=1)."""
     if len(returns) == 0 or np.isclose(returns.std(ddof=0), 0, atol=1e-14):
         return float("nan")
     excess = returns - rf / periods_per_year

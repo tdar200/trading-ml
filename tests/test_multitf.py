@@ -11,6 +11,7 @@ from data.multitf import (
     RESAMPLE_TIMEFRAMES,
     SUPPORTED_TIMEFRAMES,
     get_bars,
+    storage_symbol,
     _resample_ohlcv,
     _slice_window,
     _empty_bars,
@@ -58,6 +59,23 @@ def test_get_bars_intraday_loads_from_shard(tmp_path: Path):
     assert len(result) == 3
     assert list(result.columns) == ["ts", "open", "high", "low", "close", "volume"]
     assert result["close"].tolist() == [511.0, 512.0, 512.5]
+
+
+def test_get_bars_loads_crypto_pair_from_filesystem_safe_path(tmp_path: Path):
+    intra = tmp_path / "intraday"
+    df = pd.DataFrame({
+        "ticker": ["BTC/USD"],
+        "ts": pd.to_datetime(["2024-03-15T14:30:00Z"], utc=True),
+        "open": [68000.0], "high": [68100.0], "low": [67900.0],
+        "close": [68050.0], "volume": [2.0],
+    })
+    _write_intraday_shard(intra, "BTC-USD", "5m", df)
+    result = get_bars(
+        "BTC/USD", "5m", intraday_root=intra,
+        catalog_path=tmp_path / "nonexistent",
+    )
+    assert storage_symbol("BTC/USD") == "BTC-USD"
+    assert result["close"].tolist() == [68050.0]
 
 
 def test_get_bars_intraday_returns_empty_when_no_data(tmp_path: Path):

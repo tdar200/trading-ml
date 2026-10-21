@@ -128,3 +128,32 @@ def test_handle_alpaca_order_update_idempotent_for_already_emitted():
             emitted_fills.add(fake_order.id)
 
     assert fills_emitted == 0  # already-emitted guard prevented re-emission
+
+
+def test_actual_dispatch_cumulative_partial_fills_and_retry():
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from decimal import Decimal
+    from livesim.alpaca_exec_client import AlpacaLiveExecutionClient
+    fake=SimpleNamespace(_emitted_fills=set(),_alpaca_to_nautilus={'o':object()},_fills_emitted=0,_emit_fill_from_alpaca=Mock(),_log=Mock())
+    def update(q,p,status='partially_filled'):
+        AlpacaLiveExecutionClient._handle_alpaca_order_update(fake,SimpleNamespace(id='o',status=status,filled_qty=str(q),filled_avg_price=str(p)))
+    update('30','10');update('30','10');update('20','10')
+    update('70',str((Decimal(300)+Decimal(402))/70))
+    update('100','10.05','filled');update('100','10.05','filled')
+    fills=[call.args[1] for call in fake._emit_fill_from_alpaca.call_args_list]
+    assert [Decimal(f.filled_qty) for f in fills]==[30,40,30]
+    assert [Decimal(f.filled_avg_price) for f in fills]==[Decimal('10'),Decimal('10.05'),Decimal('10.10')]
+    assert sum(Decimal(f.filled_qty)*Decimal(f.filled_avg_price) for f in fills)==1005
+
+
+def test_actual_cancelled_order_still_accounts_fractional_execution():
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from livesim.alpaca_exec_client import AlpacaLiveExecutionClient
+    fake=SimpleNamespace(_emitted_fills=set(),_alpaca_to_nautilus={'o':object()},_fills_emitted=0,_emit_fill_from_alpaca=Mock(),_log=Mock())
+    order=SimpleNamespace(id='o',status='canceled',filled_qty='0.25',filled_avg_price='100')
+    AlpacaLiveExecutionClient._handle_alpaca_order_update(fake,order)
+    AlpacaLiveExecutionClient._handle_alpaca_order_update(fake,order)
+    assert fake._emit_fill_from_alpaca.call_count==1
+    assert fake._emit_fill_from_alpaca.call_args.args[1].filled_qty=='0.25'

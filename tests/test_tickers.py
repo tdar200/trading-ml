@@ -1,4 +1,9 @@
-from data.tickers import UNIVERSE, BENCHMARK, ALL_TICKERS
+from data.tickers import (
+    ALL_TICKERS, BENCHMARK, SCALPING_COMMODITY_PROXIES, SCALPING_CRYPTO,
+    SCALPING_GROUPS, SCALPING_OTHER, SCALPING_SECURITIES, SCALPING_STOCKS,
+    SCALPING_UNIVERSE,
+    UNIVERSE, scalping_asset_group,
+)
 
 
 def test_universe_has_eleven_sector_etfs():
@@ -37,3 +42,22 @@ def test_benchmark_is_last_in_all_tickers():
     returns. Also asserted at module-import time in data/tickers.py."""
     assert ALL_TICKERS[-1] == BENCHMARK
     assert ALL_TICKERS[:-1] == UNIVERSE
+
+
+def test_scalping_universe_has_four_explicit_sleeves():
+    assert len(SCALPING_STOCKS) == 30
+    assert len(SCALPING_COMMODITY_PROXIES) == 10
+    assert len(SCALPING_CRYPTO) == 10
+    assert len(SCALPING_OTHER) == 10
+    assert len(SCALPING_UNIVERSE) == 60
+    assert len(SCALPING_SECURITIES) == 50
+    assert SCALPING_UNIVERSE == SCALPING_SECURITIES + SCALPING_CRYPTO
+    assert len(set(SCALPING_UNIVERSE)) == 60
+    assert BENCHMARK not in SCALPING_UNIVERSE
+    for name, symbols in SCALPING_GROUPS.items():
+        assert symbols
+        assert all(scalping_asset_group(symbol) == name for symbol in symbols)
+
+
+def test_unknown_scalping_symbol_is_custom():
+    assert scalping_asset_group("CUSTOM") == "custom"

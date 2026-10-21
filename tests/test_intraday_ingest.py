@@ -32,6 +32,13 @@ def test_shard_path_includes_timeframe(tmp_path: Path):
     assert p_5m != p_1h
 
 
+def test_shard_path_encodes_crypto_pair(tmp_path: Path):
+    path = shard_path(
+        tmp_path, "BTC/USD", "5m", pd.Timestamp("2024-03-15T10:00:00Z"),
+    )
+    assert path == tmp_path / "BTC-USD" / "5m" / "2024-03.parquet"
+
+
 def test_shard_path_normalizes_naive_timestamp(tmp_path: Path):
     """Naive timestamps are treated as UTC (matches Stage 1's pattern)."""
     p = shard_path(tmp_path, "XLK", "15m", pd.Timestamp("2024-12-01"))

@@ -1,0 +1,19 @@
+name: Fundamental numerical and PIT regression
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  fundamentals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install numpy pandas scipy scikit-learn pytest pytest-asyncio streamlit playwright==1.58.0
+      - run: python -m playwright install --with-deps chrome
+      - run: python -m pytest -q tests/test_fundamentals.py tests/test_fundamental_independent_audit.py tests/test_fundamental_closure.py tests/e2e/test_fundamentals_browser.py tests/e2e/test_fundamental_audit_browser.py tests/e2e/test_fundamental_closure_browser.py
+      # Permanent point-in-time / formula / decision regression suite from the 2026-10-01 re-audit. These files are
+      # self-contained (they build their own fixtures); the ones that need cached SEC/ALFRED data or price history
+      # under results/ (git-ignored) are run locally, see docs/fundamental-reaudit-2026-10-01.md.
+      - run: python -m pytest -q -o addopts="" tests/qa_reaudit/test_calc_*.py tests/qa_reaudit/test_dec_decision.py tests/qa_reaudit/test_dec_paper.py tests/qa_reaudit/test_lead_fixes.py tests/qa_reaudit/test_mac_estimates_insiders.py tests/qa_reaudit/test_mac_events.py tests/qa_reaudit/test_mac_macro.py tests/qa_reaudit/test_pit_boundaries.py tests/qa_reaudit/test_pit_host_timezone.py tests/qa_reaudit/test_pit_providers_paper.py tests/qa_reaudit/test_pit_random_differential.py tests/qa_reaudit/test_pit_recovery_concurrency.py tests/qa_reaudit/test_pit_selection_sites.py tests/qa_reaudit/test_pit_versioning.py

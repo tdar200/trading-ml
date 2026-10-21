@@ -31,9 +31,9 @@ def test_single_trial_no_penalty():
     assert out["observed_sharpe"] == pytest.approx(1.0)
     assert out["n_trials"] == 1
     assert out["expected_max_sharpe"] == pytest.approx(0.0)
-    # With SR=1, n_obs=252: sigma_SR ≈ sqrt(1.5/251) ≈ 0.0773; z ≈ 12.94 → p ≈ 1.0
-    assert out["deflated_sharpe"] > 10
-    assert out["p_value"] == pytest.approx(1.0, abs=1e-6)
+    # One year of daily returns at annual Sharpe 1 is approximately z=1.
+    assert out["deflated_sharpe"] == pytest.approx(.997, abs=.002)
+    assert out["p_value"] == pytest.approx(.841, abs=.002)
 
 
 def test_winner_in_many_trials_with_mean_zero_depresses():
@@ -70,3 +70,13 @@ def test_higher_n_obs_tightens_p_value():
     low = deflated_sharpe(sharpes, n_obs=50)
     high = deflated_sharpe(sharpes, n_obs=5000)
     assert high["p_value"] >= low["p_value"]
+
+
+def test_annual_and_daily_units_are_equivalent():
+    annual=deflated_sharpe([1., .5],252)
+    daily=deflated_sharpe([1/math.sqrt(252), .5/math.sqrt(252)],252,periods_per_year=1)
+    assert annual['deflated_sharpe']==pytest.approx(daily['deflated_sharpe'])
+
+
+def test_nonfinite_input_rejected():
+    with pytest.raises(ValueError): deflated_sharpe([float('nan')],252)

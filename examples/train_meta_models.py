@@ -180,8 +180,9 @@ def main() -> int:
         store = ModelStore(cache_dir=cache_dir, label=label)
         print(f"  combo={label}  training {len(cutoffs)} cutoff models...")
         for cutoff in cutoffs:
-            # Train on rows where date < cutoff - purge_horizon (use 21 = horizon_days).
-            train = dataset[dataset["date"] < cutoff - pd.Timedelta(days=21)]
+            # Purge by label MATURITY: the label horizon is 21 SESSIONS (~29-33 calendar days with weekends and
+            # holidays), so 21 calendar days let the last training labels end after the cutoff. 35 days is safe.
+            train = dataset[dataset["date"] < cutoff - pd.Timedelta(days=35)]
             if len(train) < 50:
                 # Not enough training data yet; skip this cutoff.
                 continue

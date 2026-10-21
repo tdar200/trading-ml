@@ -25,8 +25,14 @@ class RunSpec:
     slippage_prob: float = 0.25
     starting_cash: int = 100_000
     random_seed: int = 42
+    validate_data: bool = True
+    log_level: str = "WARNING"
 
     def __post_init__(self) -> None:
+        if self.start.tzinfo is None or self.end.tzinfo is None:
+            raise ValueError("start and end must be timezone-aware")
+        if self.log_level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+            raise ValueError(f"unsupported log_level: {self.log_level}")
         if self.end <= self.start:
             raise ValueError(f"end must be after start (got start={self.start}, end={self.end})")
         if self.starting_cash <= 0:

@@ -84,3 +84,14 @@ def test_runresult_carries_spec_metrics_and_equity():
     assert result.metrics["sharpe"] == 1.2
     assert len(result.equity_curve) == 2
     assert result.spec.label == "ok"
+
+
+def test_runspec_rejects_naive_datetimes():
+    with pytest.raises(ValueError, match="timezone-aware"):
+        RunSpec(
+            label="ambiguous-timezone",
+            strategy_class=MomentumTopNStrategy,
+            strategy_config=_basic_config(),
+            start=datetime(2024, 1, 1),
+            end=datetime(2024, 6, 1),
+        )

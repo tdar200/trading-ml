@@ -1,4 +1,27 @@
+## Financial QA audit — 30 September 2026
+
+See [the independent audit](docs/qa-financial-audit.md) before interpreting trading results. The local £100 replay/paper path has an independent Decimal oracle, a permanent 30-trade golden fixture and numerical browser/export tests. The legacy Alpaca adapter still fails partial-fill accounting and is not certified. Live money remains disabled.
+
+Current-source historical outputs are in `results/qa_audit_20260930/corrected_research`; old `results/small_account` source fingerprints intentionally no longer match after repairs. Legacy CCI/RSI and multi-asset CV outputs require regeneration. No strategy qualified for deployment.
+
+## Re-audit corrections, 1 October 2026
+
+An independent re-audit (see [docs/fundamental-reaudit-2026-10-01.md](docs/fundamental-reaudit-2026-10-01.md)) recomputed the headline research claims. These statements below are **withdrawn or qualified**:
+
+- **Stage 5 "meta clearly beats baseline OOS, +29.1% median window Sharpe" is withdrawn.** The harness "walk-forward" windows are nested and expanding, so their median is not an out-of-sample statistic. On the full 1,463-session window the best meta combination has Sharpe 0.9916 against 0.9867 for the baseline (+0.5%), only 1 of 24 combinations beats the baseline, total return is 68.8% against 153.7%, and meta wins 1 of 5 disjoint sub-periods.
+- **The Deflated Sharpe values (z = 23.96, 25.14, 23.28) are invalid.** They combine an annualised Sharpe with a per-day standard error. Units-consistent z is about 2.5 (Stage 3), 2.1 and 1.9 (Stage 5). Pairing the best-window Sharpe with its own 295-session sample gives z = 1.11, p = 0.87, below the 0.95 gate, so "survives DSR" does not hold.
+- **The macro filter is not shown to add value.** It was no better than random trade skipping in a 24-seed placebo (all p > 0.2); it is inert for XLE (score above zero on every day) and blocks every XLP and XLV trade. The XLE zero increment is therefore not a robust null.
+- **Selection bias:** the "leading XLE candidate" is the top-ranked of 144 candidates with no candidate qualifying, and all 144 diagnostic outcomes had already been inspected.
+- **Known limitation (QA-BT-02):** Stage 5 features use the close of the decision date, and backtests fill at that same close, so decision information is not strictly earlier than the fill. Not fixed here because it would invalidate the stored models.
+
 # trading-ml
+
+> Research audit (2026-09-30): historical DSR confidence values below were
+> computed with inconsistent annualized/per-day units and are invalid as
+> deployment evidence. The scalar calculation is now corrected, but older
+> reports have not been regenerated; medians of window Sharpes still do not
+> satisfy its IID sampling assumptions. See [£100 research](docs/small-account-research.md).
+
 
 ML + trading research lab on NautilusTrader using free Alpaca daily-bar data.
 Long-running project — see `docs/superpowers/specs/2026-05-26-trading-ml-design.md`
@@ -57,10 +80,110 @@ for the full design, philosophy, and staged roadmap.
   - [x] `data/ingest_alpaca_intraday.py` — 1m / 5m / 15m / 30m / 1h / 4h bar ingest from Alpaca's free-tier IEX feed (sibling of Stage 1's daily catalog). Idempotent per-(ticker, timeframe, month) parquet shards under `data/intraday/<ticker>/<tf>/<YYYY-MM>.parquet`.
   - [x] `data/multitf.py` — single `get_bars(ticker, timeframe, start, end)` entry. Three branches: intraday parquet / Stage-1 daily catalog / pandas OHLC resample for 1w / 1M / 1Y. Uniform output schema [ts, open, high, low, close, volume] across all timeframes.
   - [x] `dashboard/views/equity.py` — rewritten to use `streamlit-lightweight-charts` (Streamlit-native wrapper around TradingView's open-source Lightweight Charts, Apache 2.0). Ticker selector + TradingView-style timeframe segmented control (1m / 5m / 15m / 30m / 1h / 4h / 1d / 1w / 1M / 1Y) + candlestick + volume subchart with up/down color coding. Per-timeframe sensible-default lookback (1m: 5 days → 1Y: 20 years). Falls back to legacy Stage-7 equity overlay when intraday cache empty.
-  - [x] `dashboard/views/backtest_lab.py` — self-service strategy tester. Auto-discovers `(Strategy, StrategyConfig)` pairs via `pkgutil` walk over `strategies/` (new strategy = new dropdown entry, no manual registry). Auto-renders parameter form via msgspec `__struct_fields__` introspection (subclass-only fields; the 16+ inherited base fields stay hidden). Three modes: **Single** (one backtest via `analysis.runner.run`), **Grid** (sweep one numeric param ≤200 cells via `analysis.walk_forward.walk_forward` + sortable table + bar chart), **Optuna** (n_trials hyperparameter optimization writing to `results/optuna.db` + shows the launch command for the rich `optuna-dashboard` visualization).
+  - [x] `dashboard/views/backtest_lab.py` — self-service research lab with five modes: **Single**, **Grid**, **Parameter Optimizer**, structural **Strategy Finder**, and intraday **Scalping Finder**.
   - [x] `dashboard/views/strategy_runner.py` — form-driven launcher for `examples/run_trading_node.py` (exec mode / fast-replay / poll-seconds / slippage); streams subprocess stdout via `st.write_stream`. For quick smoke checks only — the actual 3-month paper observation is terminal-based.
-  - [x] `dashboard/app.py` — 7 tabs wired (Equity, Backtest Lab, Strategy Runner, Harness Verdicts, Sentiment, Models, Journal). All on the free-tier Alpaca IEX feed. 170 tests pass.
+  - [x] `dashboard/app.py` — 7 tabs wired (Equity, Backtest Lab, Strategy Runner, Harness Verdicts, Sentiment, Models, Journal). All on the free-tier Alpaca IEX feed.
   - **Costs**: $0/mo as designed. Optional Tiingo Power ($30/mo) gives 30+ years of daily/weekly history if you outgrow the ~5.5yr Alpaca IEX window. Live websocket tick streaming is also free on Alpaca; historical tick playback requires Alpaca Plus ($99/mo) or Polygon (~$99-199/mo) and is **not** built — most retail dashboards show live ticks, not historical.
+- [x] Stage 10 — Robust Parameter Optimizer + hardened backtest validation
+  - [x] cTrader-style exhaustive grid mode enumerates every finite parameter combination.
+  - [x] Seeded adaptive TPE mode searches large spaces within a trial budget.
+  - [x] Hybrid tensor mode batches the complete grid on CPU/CUDA, keeps strong candidates from diverse parameter regions, then validates every finalist through Nautilus.
+  - [x] Every candidate is evaluated on non-overlapping windows and ranked by median Sharpe with stability/drawdown penalties; no-trade and invalid candidates are disqualified.
+  - [x] Full ranked results, per-window evidence, and Pareto-optimal candidates are retained—not only one winner.
+  - [x] Canonical runner rejects ambiguous datetimes, missing data, duplicate/unsorted bars, ticker mismatches, and missing instrument definitions.
+  - [x] CLI: `uv run python examples/optimize_parameters.py --smoke`; dashboard: Backtest Lab → Parameter Optimizer.
+  - [x] Real-catalog acceptance smoke: 2 candidates × 2 independent windows; top_n=2 ranked first with robust score 0.9878. **This smoke result is validation evidence, not a trading recommendation.**
+  - [x] 228 offline tests pass, including optimizer repeatability, full-grid coverage, tensor batching, CUDA/CPU execution parity, synthetic Nautilus winner parity, Pareto ranking, data integrity, event/live parity, structural-search, and multi-instrument scalping suites.
+  - [x] CUDA pre-screen acceptance passed on the local RTX 3050: all 165 default combinations were tensor-screened on GPU, then 20 finalists were validated across 4 windows (80 Nautilus runs). The lockfile remains CPU-portable, so use the activation instructions in `docs/parameter-optimizer.md`; Nautilus finalist validation remains CPU-bound by design.
+
+- [x] Stage 11 — Structural Strategy Finder
+  - [x] Serializable rule grammar searches momentum vs mean reversion, optional 126/200-day trend filters, and optional positive-signal gates.
+  - [x] Crosses each rule structure with the existing top-N/lookback/skip parameter grid; default search covers 12 structures and 2,160 combined candidates.
+  - [x] GPU/CPU tensor screen preserves representatives from distinct structures; canonical Nautilus validation and an explicit complexity penalty determine final rankings.
+  - [x] Plain-English descriptions plus rankings, per-window evidence, and structural pre-screen CSV exports.
+  - [x] CLI: `.venv/bin/python examples/find_strategies.py --smoke --device cuda`; dashboard: Backtest Lab → Rotation Rule Finder.
+  - [x] The grammar is constrained and serializable—no generated Python is executed. See `docs/strategy-finder.md`.
+
+- [x] Stage 12 — Intraday Scalping Finder
+  - [x] Searches mean-reversion, momentum, and breakout structures across 60 instruments on 5-minute bars: 30 stocks, 10 commodity proxies, 10 crypto pairs, and 10 other contenders; SPY is benchmark-only.
+  - [x] CUDA generates signals, screens all 108 entry rules independently per instrument, and executes the stateful validation kernel; 18 cross-instrument finalists expand into 162 candidates evaluated across 240 instrument-window cells.
+  - [x] Full CUDA-first acceptance completes in 170.24 seconds (including data I/O and reports), with all rankings and holdouts matching the CPU reference within FP64 tolerance.
+  - [x] Uses completed-bar signals, next-bar-open fills, regular-session entries, mandatory end-of-day flattening, common-session alignment, and explicit per-side cost stress.
+  - [x] Preserves an untouched final 20% holdout for every instrument and reports aggregate, sleeve-level, and per-instrument evidence against passive SPY.
+  - [x] Full acceptance run used 2,125,227 traded bars / 490 common sessions. Best discovery candidate held at most 30 minutes but failed holdout: -10.80% average instrument return, -2.209 median Sharpe, 1/60 instruments positive, 0/60 beating SPY; median return at 5 bp/side was -34.76%.
+  - [x] **Verdict: REJECT — no tested scalping candidate is deployable.**
+  - [x] CLI: `.venv/bin/python examples/find_scalping_strategies.py --device cuda`; dashboard: Backtest Lab → Scalping Finder.
+  - [x] Five-minute IEX bars are not tick/quote/order-book data; scope and evidence are documented in `docs/scalping-finder.md`.
+
+- [x] Stage 13 — Selective Opening Range Finder
+  - [x] CUDA-only long/short 15/30/60-minute opening-range structures across the 30-stock basket.
+  - [x] Causal relative-volume, ATR, and optional SPY-alignment filters; exact-clock complete-range enforcement and one trade per stock/day.
+  - [x] Shared-capital equal-weight portfolio ranking across four discovery windows, followed by an untouched final 20% holdout and 1/2.5/5 bp cost stress.
+  - [x] Searches 162 entry structures and validates 648 fully specified candidates on 1,538,750 bars.
+  - [x] Acceptance winner: short 15-minute range, 0.5 ATR breakout, 1× relative volume, SPY alignment, 1.5 ATR target, 0.5 ATR stop, 30-minute hold.
+  - [x] **Verdict: REJECT** — untouched portfolio -2.92%, Sharpe -4.780, -2.94% maximum drawdown, 1,563 trades; -6.87% at 5 bp/side.
+  - [x] CLI: `.venv/bin/python examples/find_opening_range_strategies.py --device cuda`; dashboard: Backtest Lab → Opening Range Finder.
+  - [x] See `docs/opening-range-finder.md` and `results/opening_range_finder_20260912T135021Z/`.
+
+- [x] Stage 14 — Cross-Sectional Market-Neutral Finder
+  - [x] CUDA search over 972 momentum/reversal portfolio candidates across 30 individual stocks, with fixed intraday decision times, beta-residual ranking, relative-volume and dispersion gates, and at most one portfolio entry per day.
+  - [x] Next-bar-open entry/exit, explicit two-sided costs, causal rolling SPY beta, and weight projection to approximately zero dollars and zero market beta.
+  - [x] Four discovery windows plus a sealed final 20% holdout, 1/2.5/5 bp cost stress, contribution concentration, combinatorial PBO, and Deflated Sharpe diagnostics.
+  - [x] Best research candidate: 10:00 ET momentum ranking over 30 minutes, long/short five, held 60 minutes. Untouched holdout at 1 bp/side: +5.83%, Sharpe 1.540, -4.21% maximum drawdown, 1,140 stock round trips, mean absolute beta 0.003.
+  - [x] **Verdict: REJECT** — return falls to -3.19% at 5 bp/side, combinatorial PBO is 66.7%, and multiple-testing-adjusted Deflated Sharpe confidence is effectively 0%; quote-aware validation and a new future holdout are still required.
+  - [x] CLI: `.venv/bin/python examples/find_cross_sectional_strategies.py`; dashboard: Backtest Lab → Cross-Sectional Finder.
+  - [x] See `docs/cross-sectional-finder.md`.
+
+- [x] Stage 15 — Support/Resistance Confluence Finder
+  - [x] Six mechanical causal level families: previous day, previous week, available IEX premarket proxy, 30-minute opening range, 24-bar swing range, and expanding VWAP bands, plus an any-level ensemble.
+  - [x] Three-bar breakout/retest, rejection, and failed-breakout confirmations combined with momentum/reversal beta-residual ranking across 30 stocks.
+  - [x] CUDA evaluates 1,680 candidates with next-open entries, beta-neutral long/short weights, 0.5 ATR stop, 2R target, stop-first same-bar ambiguity, and 1/2.5/5 bp cost stress.
+  - [x] Discovery winner: any-level failed-breakout reversal at 10:00 ET, 30-minute lookback, long/short two, 120-minute maximum hold.
+  - [x] **Verdict: REJECT** — reused evaluation period returned -2.73% at 1 bp/side and -9.53% at 5 bp/side, Sharpe -1.440. It did not improve the plain cross-sectional winner.
+  - [x] Evaluation dates are explicitly marked as previously exposed and can never produce a deployment PASS. A new future period plus SIP/NBBO replay is mandatory.
+  - [x] CLI: `.venv/bin/python examples/find_support_resistance_strategies.py`; dashboard: Backtest Lab → Support/Resistance Finder.
+  - [x] See `docs/support-resistance-finder.md` and `results/support_resistance_finder_20260912T152530Z/`.
+
+- [x] Stage 16 — Cost-Gated Profitability Finder
+  - [x] Four pre-registered families: first-half-hour sector/beta-residual momentum, causal intraday seasonality, pooled walk-forward ridge, and CUDA elastic net; SIP quote-flow confirmation activates only with sufficient NBBO coverage.
+  - [x] Dynamic per-session universe recovered 667 sessions while requiring ≥15 eligible stocks; CUDA FP64 forecast fitting, causal expected-return/error calibration, variable breadth, cash/beta-neutral projection, regime filters, and explicit no-trade gates.
+  - [x] Fail-closed SIP quote ingest plus optional point-in-time membership and earnings/macro blackout inputs. Current IEX bars are never mislabeled as NBBO data.
+  - [x] Full run searched 4,536 candidates: 60 warm-up + 485 discovery + 122 evaluation sessions. Winner returned +7.94% at 1 bp/side, Sharpe 1.620, max drawdown -6.51%, 60 events.
+  - [x] Frozen-candidate SHA-256 manifests, append-only fingerprint-bound paper journal, strict deployment qualifier, and fail-closed pre-order exposure/data/spread/reconciliation/duplicate/daily-loss/kill-switch guard.
+  - [x] **Verdict: REJECT** — -0.33% at 2.5 bp/side, no trades at 5 bp, PBO 50.0%, effectively zero DSR confidence, insufficient evaluation/events, and required SIP/membership/events/new-forward data are absent.
+  - [x] The 60-signal combinatorial engine is exposed as Backtest Lab → Strategy Finder; the older two-family ETF search is labelled Rotation Rule Finder.
+  - [x] See `docs/profitability-finder.md` and `results/profitability_finder_20260912T164940Z/`.
+  - [x] V3 limits the search to 40–48 preregistered configurations and adds
+    causal VWAP, opening/prior-range support/resistance, rejection, relative-volume,
+    causal online expert weighting, regime routing, event, and SIP confirmation
+    with conservative latency/impact costs.
+  - [x] Keyless hourly acceptance used 723 common sessions with 252 held out.
+    The adaptive families did not displace pooled ridge; holdout return was
+    -4.39% at 2.5 bp/side, Sharpe -1.439, 29 events: **REJECT**.
+  - [x] V4 primitive-signal finder provides exactly 60 causal indicators and
+    constructs standalone plus 2–4 signal consensus strategies. The acceptance
+    run GPU-screened 1,586 combinations, canonically replayed 48 finalists, and
+    found EMA(5) distance + stochastic(5) + ROC(3). It failed the exposed
+    evaluation at -28.99%, Sharpe -2.826, PBO 66.7%, DSR confidence 0.04%:
+    **REJECT**. Future runs now require positive worst-window discovery results
+    before the holdout can be opened.
+  - [x] V5 replaces continuous indicator voting with natural threshold/crossing
+    setups and searches individual indicator/time variants without family or
+    correlation pruning, separates 280 orientation sessions from 126 nested
+    validation sessions with a 5-session purge, and uses one-bar versus
+    session-close targets. The unrestricted 60-indicator, one-to-four-way space
+    contains 523,685 combinations per decision time and is GPU-screened in
+    batches before canonical finalist validation.
+  - [x] Separate equity, commodity-proxy, other-security, and crypto sleeves prevent
+    incompatible session and fee models from being mixed. Crypto fails closed until
+    its dedicated continuous-session replay exists.
+  - [x] Data/deployment preflights and operator runbook:
+    `examples/preflight_profitability_data.py`,
+    `examples/preflight_profitability_deployment.py`, and
+    `docs/profitability-deployment-runbook.md`.
+  - [x] Keyless Yahoo research ingest is isolated under `data/free_intraday`,
+    carries explicit `yfinance_research_only` provenance, and cannot satisfy
+    SIP/NBBO or broker-evidence approval gates.
 
 ## Setup
 
@@ -157,14 +280,14 @@ uv run streamlit run dashboard/app.py
 | Tab | What you see |
 |---|---|
 | Equity | TradingView-style candlestick + volume chart with timeframe selector: 1m / 5m / 15m / 30m / 1h / 4h / 1d / 1w / 1M / 1Y. Ticker selector over the 12-ETF universe. |
-| Backtest Lab | Auto-discovered strategy + auto-rendered param form. Three modes: Single backtest / Grid sweep (≤200 cells) / Optuna optimization. Same engine as the canonical Stage-3 harness. |
+| Backtest Lab | Single, Grid, Parameter Optimizer, structural Strategy Finder, and intraday Scalping Finder; GPU/CPU screening plus robust multi-window/Pareto rankings and strict holdout rejection. |
 | Strategy Runner | Form-driven launcher for `run_trading_node.py` (exec-mode + fast-replay or poll cadence). Streams subprocess output inline. |
 | Harness Verdicts | Stage-3 winner JSON + Stage-5/6 baseline-vs-meta cards with %-delta. |
 | Sentiment | Stage-6 ablation verdict + per-fold ΔIC + per-ticker headline browser. |
 | Models | `models/cache/` + `cache_v2/` coverage pivots + LightGBM feature importances. |
 | Journal | All `docs/superpowers/specs/*.md` + `plans/*.md` rendered inline, newest first. |
 
-Built on `streamlit-lightweight-charts` (MIT, 223⭐ Streamlit-native wrapper around TradingView's open-source `lightweight-charts` JS library, Apache 2.0). Strategy auto-discovery via `pkgutil`; param-form auto-render via msgspec `__struct_fields__` introspection. Optuna mode hands off to `optuna-dashboard` (MIT, separate browser tab) for parallel-coords / hyperparameter-importance / contour plots — don't re-implement what's already free.
+Built on `streamlit-lightweight-charts` (MIT, 223⭐ Streamlit-native wrapper around TradingView's open-source `lightweight-charts` JS library, Apache 2.0). Strategy auto-discovery via `pkgutil`; param-form auto-render via msgspec `__struct_fields__` introspection. Parameter Optimizer uses Optuna TPE or exhaustive grids; Strategy Finder searches constrained serialized rule structures.
 
 **Costs**: $0/mo as designed. All deps MIT / Apache. Alpaca free-tier IEX gives ~5 years of 1m → 1h history + ~5.5 years daily. Optional Tiingo Power ($30/mo) gives 30+ years of daily history if needed.
 
@@ -204,7 +327,21 @@ uv run python examples/run_harness_meta.py --smoke     # 1 combo × 2 windows
 
 Writes `baseline.csv`, `meta.csv`, `summary.json`, `summary.md` to `results/harness_meta_<timestamp>/`. The summary contains the per-combo median Sharpe ranking, Deflated Sharpe over the trial set, and an honest YES/NO verdict on whether meta beat baseline OOS + DSR.
 
-## Layout
+## Rule Strategy Finder
+
+The main dashboard now includes a **Rule Strategy Finder** tab for instrument ×
+timeframe × indicator-role searches, chronological validation, saved input
+snapshots and exact trade replay. Launch it separately with:
+
+```bash
+.venv/bin/python -m streamlit run dashboard/finder_app.py
+```
+
+Use **Synthetic demo** to exercise the complete workflow, or select existing
+local market data. See [the workflow and testing guide](docs/rule-strategy-finder.md)
+for CLI commands, execution assumptions and browser E2E tests.
+
+## Project directories
 
 ```
 data/         pipeline modules + the ParquetDataCatalog (catalog gitignored)
@@ -220,3 +357,23 @@ scripts/      one-off scripts (yfinance cross-check)
 tests/        pytest suite
 docs/         design spec, plans, Nautilus API notes
 ```
+
+## £100 account research and paper framework
+
+The 2026-09-30 audit and 144-candidate comparison produced **NO_TRADE**: no
+strategy qualified for real capital. The 10× target is analyzed, never used
+to raise risk. See [research and runbook](docs/small-account-research.md),
+[markets and evidence](docs/small-account-market-evidence.md), and
+[architecture audit](docs/small-account-architecture.md).
+
+```bash
+.venv/bin/python examples/research_small_account.py
+.venv/bin/python examples/replay_small_account.py
+.venv/bin/python examples/paper_small_account.py --once
+.venv/bin/python -m streamlit run dashboard/small_account_app.py
+```
+
+Public live GBP crypto quotes feed a local paper journal. Real-money orders
+are unavailable. The default evidence gate rejects entries; `--shadow` is
+an explicitly hypothetical paper experiment. Create
+`results/small_account/STOP_TRADING` to block new entries in a running process.

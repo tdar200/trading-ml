@@ -23,6 +23,9 @@ from dashboard.views import (
     models,
     sentiment,
     strategy_runner,
+    rule_discovery,
+    small_account,
+    fundamentals,
 )
 
 
@@ -54,6 +57,9 @@ def main() -> None:
         "Sentiment",
         "Models",
         "Journal",
+        "Rule Strategy Finder",
+        "£100 Research",
+        "Fundamentals",
     ])
     with tabs[0]:
         equity.render(sources)
@@ -69,6 +75,12 @@ def main() -> None:
         models.render(sources)
     with tabs[6]:
         journal.render(sources)
+    with tabs[7]:
+        rule_discovery.render(sources)
+    with tabs[8]:
+        small_account.render(sources)
+    with tabs[9]:
+        fundamentals.render(sources)
 
 
 if __name__ == "__main__":

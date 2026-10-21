@@ -31,7 +31,8 @@ if str(_PROJECT_ROOT) not in sys.path:
 import pandas as pd
 from dotenv import load_dotenv
 
-from data.tickers import ALL_TICKERS
+from data.multitf import storage_symbol
+from data.tickers import BENCHMARK, SCALPING_CRYPTO, SCALPING_SECURITIES
 
 load_dotenv(_PROJECT_ROOT / ".env")
 
@@ -82,7 +83,7 @@ def shard_path(base_dir: Path, ticker: str, timeframe: str, ts: pd.Timestamp) ->
         ts = ts.tz_localize("UTC")
     if timeframe not in _TIMEFRAME_TO_ALPACA:
         raise ValueError(f"unknown intraday timeframe '{timeframe}'")
-    return Path(base_dir) / ticker / timeframe / f"{ts.strftime('%Y-%m')}.parquet"
+    return Path(base_dir) / storage_symbol(ticker) / timeframe / f"{ts.strftime('%Y-%m')}.parquet"
 
 
 def _row_from_bar(ticker: str, ts: pd.Timestamp, ohlcv: dict) -> dict:
@@ -101,7 +102,7 @@ def _row_from_bar(ticker: str, ts: pd.Timestamp, ohlcv: dict) -> dict:
 # ---- orchestration ---------------------------------------------------------
 
 def _existing_shards(ticker: str, timeframe: str) -> pd.DataFrame:
-    ticker_dir = INTRADAY_DIR / ticker / timeframe
+    ticker_dir = INTRADAY_DIR / storage_symbol(ticker) / timeframe
     if not ticker_dir.exists():
         return pd.DataFrame(columns=["ticker", "ts", "open", "high", "low", "close", "volume"])
     parts = [pd.read_parquet(p) for p in sorted(ticker_dir.glob("*.parquet"))]
@@ -118,7 +119,7 @@ def _write_shards(rows: list[dict], timeframe: str) -> int:
     df["month"] = df["ts"].dt.strftime("%Y-%m")
     written = 0
     for (ticker, month), group in df.groupby(["ticker", "month"]):
-        shard = INTRADAY_DIR / ticker / timeframe / f"{month}.parquet"
+        shard = INTRADAY_DIR / storage_symbol(ticker) / timeframe / f"{month}.parquet"
         shard.parent.mkdir(parents=True, exist_ok=True)
         if shard.exists():
             existing = pd.read_parquet(shard)
@@ -154,24 +155,68 @@ def _fetch_window(tickers: list[str], timeframe: str,
     response = client.get_stock_bars(request)
     if response.df is None or response.df.empty:
         return []
-    df = response.df.reset_index()
-    rows: list[dict] = []
-    for _, r in df.iterrows():
-        rows.append(_row_from_bar(
-            ticker=str(r["symbol"]),
-            ts=r["timestamp"],
-            ohlcv={"open": r["open"], "high": r["high"], "low": r["low"],
-                   "close": r["close"], "volume": r.get("volume", 0)},
-        ))
-    return rows
+    frame = response.df.reset_index()
+    return [
+        _row_from_bar(
+            ticker=str(row.symbol),
+            ts=row.timestamp,
+            ohlcv={
+                "open": row.open, "high": row.high, "low": row.low,
+                "close": row.close, "volume": row.volume,
+            },
+        )
+        for row in frame.itertuples(index=False)
+    ]
+
+
+def _fetch_crypto_window(
+    tickers: list[str],
+    timeframe: str,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+) -> list[dict]:
+    """Fetch Alpaca US crypto bars for a bounded time window."""
+    from alpaca.data.historical import CryptoHistoricalDataClient
+    from alpaca.data.requests import CryptoBarsRequest
+
+    client = CryptoHistoricalDataClient()
+    request = CryptoBarsRequest(
+        symbol_or_symbols=tickers,
+        timeframe=parse_timeframe(timeframe),
+        start=start.to_pydatetime(),
+        end=end.to_pydatetime(),
+    )
+    response = client.get_crypto_bars(request)
+    if response.df is None or response.df.empty:
+        return []
+    frame = response.df.reset_index()
+    return [
+        _row_from_bar(
+            ticker=str(row.symbol),
+            ts=row.timestamp,
+            ohlcv={
+                "open": row.open, "high": row.high, "low": row.low,
+                "close": row.close, "volume": row.volume,
+            },
+        )
+        for row in frame.itertuples(index=False)
+    ]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--asset-class", choices=("stock", "crypto"), default="stock",
+        help="Alpaca market-data asset class (default: stock).",
+    )
+    parser.add_argument(
         "--timeframe", default="5m",
         choices=list(_TIMEFRAME_TO_ALPACA),
         help="Intraday bar size (default 5m).",
+    )
+    parser.add_argument(
+        "--chunk-days", type=int, default=None,
+        help="Override request chunk length; useful for large symbol baskets.",
     )
     parser.add_argument(
         "--since", default=None,
@@ -184,13 +229,20 @@ def main() -> int:
     )
     parser.add_argument(
         "--tickers", default=None,
-        help="Comma-separated list of tickers. Default: full universe.",
+        help="Comma-separated symbols. Defaults to the scalping securities or crypto basket.",
     )
     args = parser.parse_args()
 
     INTRADAY_DIR.mkdir(parents=True, exist_ok=True)
 
-    tickers = list(ALL_TICKERS) if args.tickers is None else args.tickers.split(",")
+    if args.tickers is None:
+        tickers = list(
+            SCALPING_CRYPTO
+            if args.asset_class == "crypto"
+            else (*SCALPING_SECURITIES, BENCHMARK)
+        )
+    else:
+        tickers = [ticker.strip() for ticker in args.tickers.split(",") if ticker.strip()]
 
     if args.until:
         end = pd.Timestamp(args.until, tz="UTC")
@@ -208,18 +260,23 @@ def main() -> int:
         print(f"nothing to fetch: start ({start.date()}) >= end ({end.date()})")
         return 0
 
-    print(f"fetching {args.timeframe} bars from {start.date()} to {end.date()} "
-          f"for {len(tickers)} tickers...")
+    print(f"fetching {args.asset_class} {args.timeframe} bars from {start.date()} "
+          f"to {end.date()} for {len(tickers)} symbols...")
 
     # Paginate in 7-day chunks for minute timeframes, 30-day for hourly.
     # Keeps individual responses small (Alpaca caps page size).
-    chunk_days = 7 if args.timeframe.endswith("m") else 30
+    chunk_days = args.chunk_days or (7 if args.timeframe.endswith("m") else 30)
     chunk = pd.Timedelta(days=chunk_days)
     cursor = start
     total_written = 0
     while cursor < end:
         chunk_end = min(cursor + chunk, end)
-        rows = _fetch_window(tickers, args.timeframe, cursor, chunk_end)
+        fetcher = (
+            _fetch_crypto_window
+            if args.asset_class == "crypto"
+            else _fetch_window
+        )
+        rows = fetcher(tickers, args.timeframe, cursor, chunk_end)
         written = _write_shards(rows, args.timeframe)
         total_written += written
         print(f"  {cursor.date()}..{chunk_end.date()}: fetched {len(rows)}, wrote {written}")

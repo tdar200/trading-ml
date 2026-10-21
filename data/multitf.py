@@ -37,6 +37,13 @@ _RESAMPLE_RULE: dict[str, str] = {
 
 # ---- public API ----------------------------------------------------------
 
+def storage_symbol(symbol: str) -> str:
+    """Return a path-safe, reversible-enough key for market symbols."""
+    if not symbol or symbol.strip() != symbol:
+        raise ValueError("symbol must be non-empty and trimmed")
+    return symbol.replace("/", "-")
+
+
 def get_bars(
     ticker: str,
     timeframe: str,
@@ -74,7 +81,7 @@ def get_bars(
 
 def _load_intraday(ticker: str, timeframe: str, root: Path) -> pd.DataFrame:
     """Concatenate all parquet shards under root/<ticker>/<timeframe>/."""
-    tf_dir = root / ticker / timeframe
+    tf_dir = root / storage_symbol(ticker) / timeframe
     if not tf_dir.exists():
         return _empty_bars()
     parts = [pd.read_parquet(p) for p in sorted(tf_dir.glob("*.parquet"))]

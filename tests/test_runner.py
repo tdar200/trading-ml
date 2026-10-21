@@ -11,7 +11,7 @@ from nautilus_trader.model.identifiers import InstrumentId, Symbol
 from nautilus_trader.model.instruments import Equity
 from nautilus_trader.model.objects import Price, Quantity
 
-from analysis.runner import run
+from analysis.runner import _validate_inputs, run
 from analysis.runspec import RunResult, RunSpec
 from data.instruments import VENUE_MIC
 from strategies.momentum_topn import MomentumTopNConfig, MomentumTopNStrategy
@@ -109,3 +109,52 @@ def test_runner_filters_bars_by_date_window():
     r_short = run(short_spec, bars_by_ticker=bars_by_ticker, instruments=instruments)
     r_long = run(long_spec, bars_by_ticker=bars_by_ticker, instruments=instruments)
     assert r_long.metrics["n_days"] > r_short.metrics["n_days"]
+
+
+def _validation_fixture():
+    start_ns = 1_577_836_800_000_000_000
+    bars = {t: _bars(t, [100.0, 101.0], start_ns) for t in ("A", "B", "BENCH")}
+    instruments = [_instrument(t) for t in bars]
+    spec = RunSpec(
+        label="validate",
+        strategy_class=MomentumTopNStrategy,
+        strategy_config=MomentumTopNConfig(
+            universe=("A", "B"), benchmark="BENCH",
+            top_n=1, lookback_days=1, skip_days=0,
+        ),
+        start=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        end=datetime(2020, 2, 1, tzinfo=timezone.utc),
+    )
+    return spec, bars, instruments
+
+
+def test_runner_rejects_missing_required_ticker():
+    spec, bars, instruments = _validation_fixture()
+    del bars["B"]
+    import pytest
+    with pytest.raises(ValueError, match="missing bars.*B"):
+        _validate_inputs(spec, bars, instruments)
+
+
+def test_runner_rejects_duplicate_or_unsorted_bars():
+    spec, bars, instruments = _validation_fixture()
+    bars["A"] = [bars["A"][0], bars["A"][0]]
+    import pytest
+    with pytest.raises(ValueError, match="duplicate bar timestamp"):
+        _validate_inputs(spec, bars, instruments)
+
+
+def test_runner_rejects_bar_under_wrong_ticker_key():
+    spec, bars, instruments = _validation_fixture()
+    bars["A"] = bars["B"]
+    import pytest
+    with pytest.raises(ValueError, match="bar mapping mismatch"):
+        _validate_inputs(spec, bars, instruments)
+
+
+def test_runner_rejects_missing_instrument_definition():
+    spec, bars, instruments = _validation_fixture()
+    instruments = [instrument for instrument in instruments if str(instrument.id) != "A.ARCX"]
+    import pytest
+    with pytest.raises(ValueError, match="no instrument supplied for A.ARCX"):
+        _validate_inputs(spec, bars, instruments)
